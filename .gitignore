@@ -1,3 +1,5 @@
 *.hdf5
 *.h5
 src/mask_rcnn_venv/*
+*.mp4
+*.avi
