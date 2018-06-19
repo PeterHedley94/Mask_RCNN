@@ -759,6 +759,7 @@ def refine_detections_graph(rois, probs, deltas, window, config):
     class_scores_keep = tf.gather(class_scores, keep)
     num_keep = tf.minimum(tf.shape(class_scores_keep)[0], roi_count)
     top_ids = tf.nn.top_k(class_scores_keep, k=num_keep, sorted=True)[1]
+    #CHANGED-THIS not yet but could be answer
     keep = tf.gather(keep, top_ids)
 
     # Arrange output as [N, (y1, x1, y2, x2, class_id, score)]
@@ -915,8 +916,10 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     """
     # ROI Pooling
     # Shape: [batch, num_boxes, pool_height, pool_width, channels]
+    #CHANGED-THIS
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_classifier")([rois, image_meta] + feature_maps)
+
     # Two 1024 FC layers (implemented with Conv2D for consistency)
     x = KL.TimeDistributed(KL.Conv2D(1024, (pool_size, pool_size), padding="valid"),
                            name="mrcnn_class_conv1")(x)
@@ -943,7 +946,6 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     # Reshape to [batch, boxes, num_classes, (dy, dx, log(dh), log(dw))]
     s = K.int_shape(x)
     mrcnn_bbox = KL.Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
-
     return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
 
 
@@ -962,14 +964,15 @@ def build_fpn_mask_graph(rois, feature_maps, image_meta,
 
     Returns: Masks [batch, roi_count, height, width, num_classes]
     """
+    #CHANGED-THIS
     # ROI Pooling
     # Shape: [batch, boxes, pool_height, pool_width, channels]
-    x = PyramidROIAlign([pool_size, pool_size],
+    pyr = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_mask")([rois, image_meta] + feature_maps)
 
     # Conv layers
     x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv1")(x)
+                           name="mrcnn_mask_conv1")(pyr)
     x = KL.TimeDistributed(BatchNorm(),
                            name='mrcnn_mask_bn1')(x, training=train_bn)
     x = KL.Activation('relu')(x)
@@ -996,7 +999,7 @@ def build_fpn_mask_graph(rois, feature_maps, image_meta,
                            name="mrcnn_mask_deconv")(x)
     x = KL.TimeDistributed(KL.Conv2D(num_classes, (1, 1), strides=1, activation="sigmoid"),
                            name="mrcnn_mask")(x)
-    return x
+    return x,pyr
 
 
 ############################################################
@@ -2012,6 +2015,7 @@ class MaskRCNN():
         else:
             # Network Heads
             # Proposal classifier and BBox regressor heads
+
             mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
@@ -2025,15 +2029,18 @@ class MaskRCNN():
 
             # Create masks for detections
             detection_boxes = KL.Lambda(lambda x: x[..., :4])(detections)
-            mrcnn_mask = build_fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
+            #CHANGED-THIS
+            mrcnn_mask,pyr = build_fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
                                               input_image_meta,
                                               config.MASK_POOL_SIZE,
                                               config.NUM_CLASSES,
                                               train_bn=config.TRAIN_BN)
-
+            #print("#################################" + str(mrcnn_feature_maps))
+            #CHANGED-THIS
+            #, mrcnn_feature_maps
             model = KM.Model([input_image, input_image_meta, input_anchors],
                              [detections, mrcnn_class, mrcnn_bbox,
-                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox],
+                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox,pyr],
                              name='mask_rcnn')
 
         # Add multi-GPU support.
@@ -2391,7 +2398,7 @@ class MaskRCNN():
         # Detections array is padded with zeros. Find the first class_id == 0.
         zero_ix = np.where(detections[:, 4] == 0)[0]
         N = zero_ix[0] if zero_ix.shape[0] > 0 else detections.shape[0]
-
+        #CHANGED-THIS need to look at this func and add new layer
         # Extract boxes, class_ids, scores, and class-specific masks
         boxes = detections[:N, :4]
         class_ids = detections[:N, 4].astype(np.int32)
@@ -2473,10 +2480,18 @@ class MaskRCNN():
             log("molded_images", molded_images)
             log("image_metas", image_metas)
             log("anchors", anchors)
+
+        #print("Model Summary:")
+        #print(self.keras_model.summary())
         # Run object detection
-        detections, _, _, mrcnn_mask, _, _, _ =\
+        #CHANGED-THIS #,f
+        #detections, mrcnn_class, mrcnn_bbox,mrcnn_mask, rpn_rois, rpn_class, rpn_bbox,pyr =\
+        detections, _, _, mrcnn_mask, _, _, _, pyr  =\
             self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
-        # Process detections
+        print("PYR shape : " + str(pyr.shape))
+        print("Detections shape : " + str(detections.shape))
+        print("Mrcnn_mask shape : " + str(mrcnn_mask.shape))
+
         results = []
         for i, image in enumerate(images):
             final_rois, final_class_ids, final_scores, final_masks =\
@@ -2488,6 +2503,7 @@ class MaskRCNN():
                 "class_ids": final_class_ids,
                 "scores": final_scores,
                 "masks": final_masks,
+                "features" : pyr[i]
             })
         return results
 
@@ -2530,6 +2546,8 @@ class MaskRCNN():
             log("molded_images", molded_images)
             log("image_metas", image_metas)
             log("anchors", anchors)
+        #print("Model Summary:")
+        #print(self.keras_model.summary)
         # Run object detection
         detections, _, _, mrcnn_mask, _, _, _ =\
             self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)

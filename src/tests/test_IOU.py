@@ -68,6 +68,9 @@ class ComponentTestCase(unittest.TestCase):
         [indices,newer] = model_.match_ROIs(res_1, res_2)
         self.assertEqual(newer.lives[-1],3)
 
+    def test_camshift(self):
+        frame = cv2.imread('cyclist.jpg')
+
 
 if __name__ == '__main__':
     unittest.main()

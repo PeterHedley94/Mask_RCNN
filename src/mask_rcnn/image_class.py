@@ -25,5 +25,6 @@ class roi_class:
     def __init__(self,roi_,time_):
         self.time = time_
         self.roi = roi_
+        self.hist = [None] * roi_.shape[0]
         self.id = np.arange(roi_.shape[0]) + 1
         self.lives = [4] * roi_.shape[0]
