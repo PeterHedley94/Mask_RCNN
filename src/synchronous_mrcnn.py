@@ -9,11 +9,12 @@ from sensor_msgs.msg import CompressedImage
 # Root directory of the project
 #RUNNING WITHOUT ROS
 ROOT_DIR = os.path.abspath("./mask_rcnn")
+IMAGE_COUNT = 0
 #RUNNING WITH ROS
 #ROOT_DIR = os.path.join(os.path.abspath("./"),"src","mask_rcnn","src","mask_rcnn")
 VERBOSE=False
 #image_buffer
-from mask_rcnn.image_class import *
+from utils.image_class import *
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
 from mask_rcnn.mrcnn import utils
@@ -27,10 +28,6 @@ print(os.path.join(ROOT_DIR,"samples","coco"))
 sys.path.append(os.path.join(ROOT_DIR,"samples","coco"))  # To find local version
 import coco
 
-#CV2 stuff
-#cv2.namedWindow('camshift', cv2.WINDOW_NORMAL)
-#cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
-#cv2.namedWindow('raw', cv2.WINDOW_NORMAL)
 
 class InferenceConfig(coco.CocoConfig):
     # Set batch size to 1 since we'll be running inference on
@@ -39,32 +36,28 @@ class InferenceConfig(coco.CocoConfig):
     IMAGES_PER_GPU = 1
 
 class model:
-    def __init__(self):
-        #self.mask_roi_buffer = circular_buffer()
+    def __init__(self,im_width,im_height):
+
+        #Create buffers for threads
         mask_roi_buffer_lock = threading.Lock()
         self.buffers = {"mask":collections.deque(maxlen=2),"mask_image":collections.deque(maxlen=2),"image":collections.deque(maxlen=2),"camshift":collections.deque(maxlen=2)}
         self.buffer_locks = {"mask":threading.Lock(),'camshift':threading.Lock()}
         self.count = 0
+
         # Define the codec and create VideoWriter object
-        self.output_width = 640
-        self.output_height = 480
+        self.output_width = im_width
+        self.output_height = im_height
         self.output_writers = {"combined":cv2.VideoWriter_fourcc(*'XVID')}
-        self.output_videos = {"combined":cv2.VideoWriter('combined.avi',self.output_writers["combined"], 20.0, (640,480))}
+        self.output_videos = {"combined":cv2.VideoWriter('combined.avi',self.output_writers["combined"], 20.0, (self.output_width,self.output_height))}
         self.camshift_update = False
         self.stop = False
+        self.IOU_threshold = 0.3
 
-        '''Initialize ros publisher, ros subscriber'''
-        # topic where we publish
-        self.image_pub = rospy.Publisher("/output/image_raw/compressed",
-            CompressedImage)
-        # self.bridge = CvBridge()
+        self.initialise_ros()
+        self.initialise_mrcnn()
 
-        # subscribed Topic
-        self.subscriber = rospy.Subscriber("/camera/image_raw",
-            CompressedImage, self.callback,  queue_size = 1)
-        if VERBOSE :
-            print("subscribed to /camera/image/compressed")
 
+    def initialise_mrcnn(self):
         # Directory to save logs and trained model
         MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
@@ -102,9 +95,23 @@ class model:
                        'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
                        'teddy bear', 'hair drier', 'toothbrush']
 
+
+    def initialise_ros(self):
+        '''Initialize ros publisher, ros subscriber'''
+        self.image_pub = rospy.Publisher("/output/image_raw/compressed",
+            CompressedImage)
+        # self.bridge = CvBridge()
+
+        # subscribed Topic
+        self.subscriber = rospy.Subscriber("/camera/image_raw",
+            CompressedImage, self.callback,  queue_size = 1)
+        if VERBOSE :
+            print("subscribed to /camera/image/compressed")
+
+
     def camshift(self):
         # Setup the termination criteria, either 10 iteration or move by atleast 1 pt
-        term_crit = ( cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1 )
+        term_crit = ( cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 2, 1 )
         print("performing camshift")
         count = 1
         while(1):#self.stop == False):
@@ -159,7 +166,7 @@ class model:
                         hsv = cv2.cvtColor(image.frame, cv2.COLOR_BGR2HSV)
                         dst = cv2.calcBackProject([hsv],[0],hist,[0,180],1)
                         # apply meanshift to get the new location
-                        ret, track_window = cv2.CamShift(dst, track_window, term_crit)
+                        ret, track_window = cv2.meanShift(dst, track_window, term_crit)
                         print("New track window is "  + str(track_window))
                         [c,r,w,h] = track_window
 
@@ -184,7 +191,6 @@ class model:
         xA = max(boxA[1], boxB[1])
         yB = min(boxA[2], boxB[2])
         xB = min(boxA[3], boxB[3])
-
 
         # compute the area of intersection rectangle
         interArea = (xB - xA + ff) * (yB - yA + ff)
@@ -213,6 +219,7 @@ class model:
             print("No objects in last frame")
             return newer.id, newer
 
+
         matches = np.zeros((older.roi.shape[0],newer.roi.shape[0]))
         indices = np.zeros((newer.roi.shape[0]))
 
@@ -220,10 +227,14 @@ class model:
             for new_ in range(0,indices.shape[0]):
                 matches[old_,new_] = self.bb_intersection_over_union(older.roi[old_], newer.roi[new_])
                 #IOU > 0.5 = ROIs MATCH
-                if(matches[old_,new_]>0.5):
+                if(matches[old_,new_]> self.IOU_threshold):
                     newer.id[new_] = older.id[old_]
                     newer.hist[new_] = older.hist[old_]
-                    newer.lives[new_] = 4
+                    if(older.lives[old_] < 7):
+                        newer.lives[new_] = older.lives[old_] + 1
+                    else:
+                        newer.lives[new_] = older.lives[old_]
+                    newer.colours[new_] = older.colours[old_]
                     indices[new_] = older.id[old_]
 
             #CHECK THERE ARE OBJECTS IN NEW FRAME
@@ -233,11 +244,20 @@ class model:
                 max_val = 0
 
             #APPEND OLD OBJECTS TO NEW FRAME
-            if (max_val < 0.5 and older.lives[old_] > 0):
+            if (max_val < self.IOU_threshold and older.lives[old_] > 0):
                 newer.roi = np.concatenate((newer.roi, older.roi[None,old_,:]), axis=0)
                 newer.id = np.concatenate((newer.id,older.id[old_,None]), axis=0)
                 newer.lives.append(older.lives[old_]-1)
                 newer.hist.append(older.hist[old_])
+                newer.colours.append(older.colours[old_])
+                print("Older shape :" + str(older.masks[:,:,old_,None].shape))
+                print("Newer shape :" + str(newer.masks.shape))
+                if newer.masks.shape[2] == 0:
+                    newer.masks = older.masks[:,:,old_,None]
+                    newer.features = older.features[old_,:,:,:]
+                else:
+                    newer.masks = np.concatenate([newer.masks,older.masks[:,:,old_,None]],axis = 2)
+                    newer.features = np.concatenate([newer.features,older.features[None,old_,:,:,:]],axis = 0)
 
         #CHECK THERE ARE OBJECTS IN NEW FRAME
         if(matches.shape[1] == 0):
@@ -255,6 +275,76 @@ class model:
 
         return indices,newer
 
+    def max_index_selector(self,array):
+        already_used = []
+        indices = [-1] * array.shape[0]
+        max_indices = np.ones(array.shape)
+        values = np.where(array == array.min())
+
+        #when found all new indices stop
+        while(array.min()!= 1000 and len(already_used)<array.shape[0]):
+
+            if values[1][0] not in already_used and min(max_indices[values[0][0],:]) != 0:
+                already_used.append(values[1][0])
+                max_indices[values[0][0],values[1][0]] = 0
+                indices[values[0][0]] = values[1][0]+1
+            array[values[0][0],values[1][0]] = 1000
+            values = np.where(array == array.min())
+
+        for i in range(len(indices)):
+            if indices[i] == -1:
+                indices[i] = max(indices) + 1
+
+        return indices
+
+
+    def match_feature_similarity(self,older,newer):
+
+        if len(older.id) == 0:
+            return newer.id,newer
+
+        if type(newer.id) == type(None):
+            newer.id = older.id
+            newer.features = older.features
+            newer.lives = [x-1 for x in older.lives]
+            newer.colours = older.colours
+            return newer.id,newer
+
+        old_features = older.features
+        old_id = older.id
+        new_features = newer.features
+        new_id= newer.id
+
+        print("Older id is " + str(older.id))
+        print("Older features shape " + str(older.features.shape))
+        similarity = np.zeros((max(new_id)+1,max(old_id)+1))
+
+
+        for old_roi in range(len(old_id)):
+            for new_roi in range(len(new_id)):
+                similarity[new_id[new_roi],old_id[old_roi]] = np.absolute(np.mean(new_features[new_roi,:,:,:]-old_features[old_roi,:,:,:]))
+        #newer.id = np.argmin(similarity[1:,1:],axis = 1)+1
+
+        newer.id = self.max_index_selector(similarity[1:,1:,None])
+        print("Newer ids are " + str(newer.id))
+        print("Older Colours are " + str(older.colours))
+        for ind in newer.id:
+            print("Ind is " + str(ind))
+            print("Len older is is " + str(len(older.id)))
+            if ind < len(older.id)-1:
+                newer.colours[ind-1] = older.colours[ind-1]
+            else:
+                continue
+        #newer.colours = [older.colours[ind-1] for ind in newer.id if ind<len(older.id)]
+        print("Newer Colours are : " + str(newer.colours))
+        print(similarity)
+        newer.lives = [x+1  if x<7 else x for x in newer.lives]
+        print("Newer id pt 2 is " + str(newer.id))
+        if(newer.features.shape[0] != len(newer.id)):
+            print("########################################")
+        return newer.id,newer
+
+
     def track(self,type_):
 
         buff_size = len(self.buffers[type_])
@@ -264,132 +354,126 @@ class model:
         elif buff_size == 0:
             return False
 
-        older = self.buffers[type_].popleft()
-        newer = self.buffers[type_][0]
+        older = self.buffers[type_][-2]
+        newer = self.buffers[type_][-1]
         [indices,newer] = self.match_ROIs(older,newer)
+        #[indices,newer] = self.match_feature_similarity(older,newer)
+        #newer.id = np.arange(len(newer.id)) +1
         self.buffers[type_][0] = newer
 
         return indices
 
     def draw_rects(self,img,rois):
-        for lives,roi in zip(rois.lives,rois.roi):
+        global IMAGE_COUNT
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        bottomLeftCornerOfText = (10,500)
+        fontScale = 1
+        fontColor=(255,255,255)
+        lineType=2
+
+        for lives,roi,id,class_,colour in zip(rois.lives,rois.roi,rois.id,rois.class_,rois.colours):
             ''''ry1, rx1, ry2, rx2'''
-            if(lives == 4):
-                cv2.rectangle(img,(roi[1],roi[0]),(roi[3],roi[2]),(0,255,0),3)
+            if(lives > -100 and class_ in [1,2,3,4,5,6,7,8]):
+                pos_ = (roi[1]+2,roi[0]+10)
+                cv2.rectangle(img,(roi[1],roi[0]),(roi[3],roi[2]),colour,3)
+                image_name = os.path.join("output_images",str(IMAGE_COUNT) + ".jpg")
+                cv2.imwrite(image_name,img[roi[0]:roi[2],roi[1]:roi[3]])
+                IMAGE_COUNT += 1
+                text_ = self.class_names[class_] + " : " + str(id)
+                cv2.putText(img,text_, pos_, font,
+                fontScale, fontColor, lineType)
+
+    def draw_masks(self,img,rois):
+        for lives,mask,colour,class_ in zip(rois.lives,rois.masks,rois.colours,rois.class_):
+            if(lives > 4 and class_ in [1,2,3,4,5,6,7,8]):
+                img = visualize.apply_mask(img, mask, colour)
         return img
 
     def construct_frame(self):
-        w = int(self.output_width/2)
-
         raw = self.buffers["image"][0].frame.copy()
-        #print("raw image shape is " + str(raw.shape))
-        #print("int is " + str(raw.shape[1]/w))
-        h = int(self.output_height/2)#int(raw.shape[0]/(raw.shape[1]/w))
-        output = np.zeros((h * 2, w * 2, 3), dtype="uint8")
+        self.buffer_locks["mask"].acquire()
 
-        if(len(self.buffers['camshift']) > 0):
-
-            self.buffer_locks["mask"].acquire()
-            mask = self.buffers["mask_image"][-1]
-            #mask = self.draw_rects(raw,mask.roi)
-            mask = imutils.resize(mask,width=w,height=h)
-            self.buffer_locks["mask"].release()
-
-            self.buffer_locks["camshift"].acquire()
-            camshift = self.buffers['camshift'][-1]
-            camshift = self.draw_rects(raw.copy(),camshift)
-            camshift = imutils.resize(camshift,width=w,height=h)
-            self.buffer_locks["camshift"].release()
-
-            output[0:h, w:w * 2] = mask
-            output[h:h * 2, w:w * 2] = camshift
-
-        raw = imutils.resize(raw, width=w)
-        output[0:h, 0:w] = raw
-        return output
+        mask = raw.copy()
+        self.draw_rects(mask,self.buffers['mask'][-1])
+        mask = visualize.display_instances(mask, self.buffers['mask'][-1].masks,colors=self.buffers['mask'][-1].colours)
+        mask = imutils.resize(mask,width=self.output_width,height=self.output_height)
+        self.buffer_locks["mask"].release()
+        return mask
 
     def write_to_video(self):
         img = self.construct_frame()
         self.output_videos['combined'].write(img)
-        #cv2.imshow("comb",img)
         name = str(self.count) + ".jpg"
-        #cv2.imwrite(name,img)
+        cv2.imwrite("image.jpg",img)
         self.count += 1;
-        #print("written_to_video")
 
     def mask_predict(self):
+        try:
+            image = self.buffers["image"][0]
+        except IndexError:
+            image = False
+        if(image != False):
+            start = time.time()
+            with graph.as_default():
+                #results contains ['rois', 'scores', 'class_ids', 'masks']
+                results = self.model.detect([image.frame], verbose=1)
 
-        while(self.stop == False):
-            try:
-                image = self.buffers["image"][0]
-            except IndexError:
-                image = False
-            if(image != False):
-                start = time.time()
-                with graph.as_default():
-                    #results contains ['rois', 'scores', 'class_ids', 'masks']
-                    results = self.model.detect([image.frame], verbose=1)
+            # Put resuts in buffer
+            r = results[0]
+            print("R masks shape is :" + str(r['masks'].shape))
+            print("R rois shape is : " + str(r['rois'].shape))
+            print("Features shape is :" + str(r['features'].shape))
+            res_ = roi_class(r['rois'],image.time,r['class_ids'],
+            visualize.random_colors(r['rois'].shape[0]),r['masks'],r['features'])
+            #print("Masks Shape is: " + str(len(res_.masks)))
+            self.buffer_locks["mask"].acquire()
+            self.buffers['mask'].append(res_)
 
-                # Visualize results
-                r = results[0]
-                print("R shape" + str(r["features"].shape))
-                print("ROIs shape " + str(r['rois'].shape))
-                res_ = roi_class(r['rois'],image.time)
-
-                self.buffer_locks["mask"].acquire()
-
-                self.buffers['mask'].append(res_)
-
-
-                #TRACK from LAST Mask position
-                r['ids'] = self.track('mask')
-                img = visualize.display_instances(image.frame, r['rois'], r['masks'],r['class_ids'], self.class_names, r['ids'], r['scores'])
-                self.buffers["mask_image"].append(img)
-
-                self.buffer_locks["camshift"].acquire()
-                self.buffers["camshift"].append(self.buffers['mask'][-1])
-                self.camshift_update = True
-                self.buffer_locks["camshift"].release()
-
-                self.buffer_locks["mask"].release()
-                #print(results)
-                end = time.time()
-                print("Took around : " + str(end-start))
-                #visualize.display_instances(image.frame, r['rois'], r['masks'],r['class_ids'], self.class_names, r['ids'], r['scores'])
-            else:
-                time.sleep(1)
-
+            #TRACK from LAST Mask position
+            r['ids'] = self.track('mask')
+            self.buffer_locks["mask"].release()
+            #print(results)
+            end = time.time()
+            print("Took around : " + str(end-start))
 
 
     def callback(self,frame):#ros_data):
         frame_time = time.time()
         image = image_class(frame,frame_time)
         self.buffers["image"].append(image)
-        time.sleep(0.05)
+        self.mask_predict()
         self.write_to_video()
 
         #self.mask_predict()
 
+def print_progress(counter,total):
+    inc = 5 #print every 10%
+    percentage = str(counter/total * 100)
+    title_string = percentage + str('% [')
+    for i in range(round(counter/total * 100/inc)):
+        title_string = title_string + '=='
+    title_string = title_string + '>'
+    for i in range(round(100/inc-round(counter/total * 100/inc))):
+        title_string = title_string + '__'
+    title_string = title_string + ']'
+    print(title_string)
 
 def main(args):
     '''Initializes and cleanup ros node'''
-    ic = model()
+    path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/gold.avi'
+    cap = cv2.VideoCapture(path)
+    frame_width = int( cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height =int( cap.get( cv2.CAP_PROP_FRAME_HEIGHT))
+    ic = model(frame_width,frame_height)
 
-    mask_rcnn_thread = threading.Thread(target=ic.mask_predict)
-    mask_rcnn_thread.daemon = True
-    mask_rcnn_thread.start()
-
-    '''
-    camshift_thread = threading.Thread(target=ic.camshift)
-    camshift_thread.daemon = True
-    camshift_thread.start()
-    '''
     print(os.getcwd())
-    path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/vid.mp4'
-    cap = cv2.VideoCapture(0)
+    frame_no = 0
+
     if(cap.isOpened() == False):
       print("Failed to get camera")
     else:
+        length_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        print("Found " + str(length_video) + " images")
         #rospy.init_node('mask_rcnn', anonymous=True)
         try:
             #rospy.spin()
@@ -398,20 +482,21 @@ def main(args):
             while(1):
                 ret,frame = cap.read()
                 if ret ==True:
-                    ic.callback(frame)
+                    if frame_no > 900:
+                        ic.callback(frame)
+                    else:
+                        print_progress(frame_no,length_video)
+                        frame_no += 1
                 else:
                     print("Failed")
                     break
 
         except KeyboardInterrupt:
             print("shutting down")
-            self.stop = True
+            ic.stop = True
 
-        mask_rcnn_thread.join()
-        #camshift_thread.join()
         print ("Shutting down ROS Image feature detector module")
-        self.output_writers["combined"].stop()
-        self.output_videos['combined'].release()
+        ic.output_videos['combined'].release()
         cv2.destroyAllWindows()
 
 

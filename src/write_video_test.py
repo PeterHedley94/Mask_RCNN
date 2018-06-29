@@ -1,6 +1,5 @@
 import os,sys
 sys.path.insert(1,'/usr/local/lib/python3.5/dist-packages')
-
 import cv2,imutils
 
 '''
@@ -30,20 +29,35 @@ import cv2
 
 path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn'
 cap = cv2.VideoCapture('/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/vid.mp4')
+frame_width = int( cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height =int( cap.get( cv2.CAP_PROP_FRAME_HEIGHT))
+
+output_width = 640
+output_height = 480
+output_writers = {"combined":cv2.VideoWriter_fourcc(*'XVID')}
+output_videos = {"combined":cv2.VideoWriter('test.avi',output_writers["combined"], 20.0, (frame_width,frame_height))}
 
 if(cap.isOpened() == False):
     print("Video not located")
 
 while(cap.isOpened()):
     ret, frame = cap.read()
+    if(ret==True):
+        print(frame.shape)
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    cv2.imshow('frame',gray)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        img = cv2.cvtColor(gray,cv2.COLOR_GRAY2BGR)
+        #img = imutils.resize(img,width=640,height=480)
+        output_videos['combined'].write(img)
+        #cv2.imshow('frame',img)
+        cv2.imwrite("name.jpg",img)
+        #if cv2.waitKey(1) & 0xFF == ord('q'):
+            #break
+    else:
         break
 
 cap.release()
+output_videos['combined'].release()
 cv2.destroyAllWindows()
 
 

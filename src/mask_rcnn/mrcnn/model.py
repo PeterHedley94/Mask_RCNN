@@ -1976,7 +1976,8 @@ class MaskRCNN():
 
             # Network Heads
             # TODO: verify that this handles zero padded ROIs
-            mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
+            #CHANGED_THIS
+            mrcnn_class_logits, mrcnn_class, mrcnn_bbox ,shared=\
                 fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
                                      train_bn=config.TRAIN_BN)
@@ -2015,7 +2016,7 @@ class MaskRCNN():
         else:
             # Network Heads
             # Proposal classifier and BBox regressor heads
-
+            #CHANGED-THIS
             mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
@@ -2376,7 +2377,7 @@ class MaskRCNN():
         return molded_images, image_metas, windows
 
     def unmold_detections(self, detections, mrcnn_mask, original_image_shape,
-                          image_shape, window):
+                          image_shape, window,pyr):
         """Reformats the detections of one image from the format of the neural
         network output to a format suitable for use in the rest of the
         application.
@@ -2404,6 +2405,7 @@ class MaskRCNN():
         class_ids = detections[:N, 4].astype(np.int32)
         scores = detections[:N, 5]
         masks = mrcnn_mask[np.arange(N), :, :, class_ids]
+        feature_map = pyr[:N,:,:,:]
 
         # Translate normalized coordinates in the resized image to pixel
         # coordinates in the original image before resizing
@@ -2427,6 +2429,7 @@ class MaskRCNN():
             class_ids = np.delete(class_ids, exclude_ix, axis=0)
             scores = np.delete(scores, exclude_ix, axis=0)
             masks = np.delete(masks, exclude_ix, axis=0)
+            feature_map = np.delete(feature_map, exclude_ix, axis=0)
             N = class_ids.shape[0]
 
         # Resize masks to original image size and set boundary threshold.
@@ -2438,7 +2441,7 @@ class MaskRCNN():
         full_masks = np.stack(full_masks, axis=-1)\
             if full_masks else np.empty(masks.shape[1:3] + (0,))
 
-        return boxes, class_ids, scores, full_masks
+        return boxes, class_ids, scores, full_masks,feature_map
 
     def detect(self, images, verbose=0):
         """Runs the detection pipeline.
@@ -2494,16 +2497,16 @@ class MaskRCNN():
 
         results = []
         for i, image in enumerate(images):
-            final_rois, final_class_ids, final_scores, final_masks =\
+            final_rois, final_class_ids, final_scores, final_masks, fmap =\
                 self.unmold_detections(detections[i], mrcnn_mask[i],
                                        image.shape, molded_images[i].shape,
-                                       windows[i])
+                                       windows[i],pyr[i])
             results.append({
                 "rois": final_rois,
                 "class_ids": final_class_ids,
                 "scores": final_scores,
                 "masks": final_masks,
-                "features" : pyr[i]
+                "features" : fmap
             })
         return results
 
