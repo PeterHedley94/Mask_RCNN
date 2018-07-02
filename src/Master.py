@@ -33,6 +33,7 @@ import coco
 from utils.utils import print_progress
 from utils.visualiser import *
 from Tracking.Tracker import *
+from Tracking.BRISK import *
 
 
 class InferenceConfig(coco.CocoConfig):
@@ -59,6 +60,8 @@ class model:
         self.stop = False
         self.IOU_threshold = 0.3
 
+        self.BRISK_ = BRISK_class()
+
         self.initialise_ros()
         self.initialise_mrcnn()
 
@@ -73,7 +76,7 @@ class model:
 
         older = self.buffers[type_][-2]
         newer = self.buffers[type_][-1]
-        [indices,newer] = match_ROIs(older,newer, IOU_threshold=0.25)
+        [indices,newer] = match_ROIs(older,newer, self.BRISK_ ,IOU_threshold=0.25)
         #[indices,newer] = self.match_feature_similarity(older,newer)
         #newer.id = np.arange(len(newer.id)) +1
         self.buffers[type_][0] = newer
@@ -145,8 +148,16 @@ class model:
 
             # Put resuts in buffer
             r = results[0]
+            print("Mask shape is " + str(r['masks'].shape))
+            print("Features shape is " + str(r['features'].shape))
+
+            des,key = self.BRISK_.get_des_key(image.frame,r['rois'])
             res_ = roi_class(r['rois'],image.time,r['class_ids'],
-            visualize.random_colors(r['rois'].shape[0]),r['masks'],r['features'])
+            visualize.random_colors(r['rois'].shape[0]),r['masks'],r['features'],des=des,key=key)
+            if(res_.roi.shape[0] != len(des)):
+                print("FAILED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
+                print(res_.roi.shape[0])
+                print(len(des))
             #print("Masks Shape is: " + str(len(res_.masks)))
             self.buffer_locks["mask"].acquire()
             self.buffers['mask'].append(res_)
