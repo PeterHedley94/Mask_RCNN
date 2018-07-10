@@ -47,63 +47,74 @@ def bb_intersection_over_union(older,old_,newer,new_):
     return iou
 
 def get_gradient(vals):
-    no_vals = 0
     found_first_value = False
-    if(sum(vals) == 0):
-        return np.zeros((10)),1
-    #fill in missing values
-    for l in range(len(vals)-1,1,-1):
-        if found_first_value == False and vals[l-2]!=0:
-            found_first_value = True
-            no_vals = l-1
-        if found_first_value==True and vals[l-2] == 0:
-            vals[l-2] = vals[l-1] + (vals[l-1]-vals[l])
-    if(no_vals == 1):
-        return [np.zeros((10)),1]
+    no_vals = np.count_nonzero(~np.isnan(vals))
+
+    if(no_vals <= 1):
+        x = np.zeros((10))
+        x[:] = np.nan
+        return [x,50]
     #*-1 as array is in reverse order (newest at pos 0)
-    print(no_vals)
+
     grad = np.gradient(vals[:no_vals])*-1
+    #print("The gradient from values : " + str(np.gradient(vals[:no_vals])*-1) + " is " + str(grad))
     return [grad,np.std(grad)]
 
 #Use equations of motion to predict new values
 def predict_new_val(old_val,vel,vel_std,acc,acc_std,time =1):
     # x = x + ut + 1/2 *(at^2)
-    print("old_val,vel,vel_std,acc,acc_std")
-    print([old_val,vel,vel_std,acc,acc_std])
+    #print("old_val,vel,vel_std,acc,acc_std")
+    #print([old_val,vel,vel_std,acc,acc_std])
     pred = old_val + vel*time + (1/2 * acc * (time**2))
     pred_var = (vel_std**2)*time + 1/2 * (acc_std**2) * (time**2)
+    #print("Variance is : " + str(pred_var))
     return pred,pred_var
 
+
+def match_classes(older,old_,newer,new_):
+    #print("Older classes shape is : " + str(older.class_[old_].shape))
+    if older.class_[old_] == newer.class_[new_]:
+        return 1
+    else:
+        return 0
+
+def match_classes_probability(array):
+    return array
+
 def predict_ROI_probability(array):
-    return array * 0.9
+    return array *0.9
 
-#TODO add centres update to tracker!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 def predict_ROI(older,old_,newer,new_):
-    #Get velocity of change
-    [vcx,vcx_std] = get_gradient(older.centre_x[:10,old_])
-    [vcy,vcy_std] = get_gradient(older.centre_y[:10,old_])
-    [vw,vw_std] = get_gradient(older.roi_width[:10,old_])
-    [vh,vh_std] = get_gradient(older.roi_height[:10,old_])
+    #print("Older centre x is : " + str(older.centre_x) )
+    #print("########################################" + )
+    if np.isnan(older.centre_x[1,old_]):
+        [px_var,py_var,pw_var,ph_var] = [50,50,50,50]
+        [px,py,pw,ph] = [older.centre_x[0,old_],older.centre_y[0,old_],older.roi_width[0,old_],older.roi_height[0,old_]]
+    else:
+        #Get velocity of change
+        [vcx,vcx_std] = get_gradient(older.centre_x[:10,old_])
+        [vcy,vcy_std] = get_gradient(older.centre_y[:10,old_])
+        [vw,vw_std] = get_gradient(older.roi_width[:10,old_])
+        [vh,vh_std] = get_gradient(older.roi_height[:10,old_])
+        #Get acceleration of change
+        [acx,acx_std] = get_gradient(vcx)
+        [acy,acy_std] = get_gradient(vcy)
+        [aw,aw_std] = get_gradient(vw)
+        [ah,ah_std] = get_gradient(vh)
+        #Get predicted new value
+        #Maybe add weights
+        [px,px_var] = predict_new_val(older.centre_x[0,old_],np.average(vcx),vcx_std,np.average(acx),acx_std)
+        [py,py_var] = predict_new_val(older.centre_y[0,old_],np.average(vcy),vcy_std,np.average(acy),acy_std)
+        [pw,pw_var] = predict_new_val(older.roi_width[0,old_],np.average(vw),vw_std,np.average(aw),aw_std)
+        [ph,ph_var] = predict_new_val(older.roi_height[0,old_],np.average(vh),vh_std,np.average(ah),ah_std)
 
-    #Get acceleration of change
-    [acx,acx_std] = get_gradient(vcx)
-    [acy,acy_std] = get_gradient(vcy)
-    [aw,aw_std] = get_gradient(vw)
-    [ah,ah_std] = get_gradient(vh)
-
-    #Get predicted new value
-    #Maybe add weights
-    [px,px_var] = predict_new_val(older.centre_x[0,old_],np.average(vcx),vcx_std,np.average(acx),acx_std)
-    [py,py_var] = predict_new_val(older.centre_y[0,old_],np.average(vcy),vcy_std,np.average(acy),acy_std)
-    [pw,pw_var] = predict_new_val(older.roi_width[0,old_],np.average(vw),vw_std,np.average(aw),aw_std)
-    [ph,ph_var] = predict_new_val(older.roi_height[0,old_],np.average(vh),vh_std,np.average(ah),ah_std)
-
-    cov_ = np.diag([px_var,py_var,pw_var,ph_var] + np.abs(np.random.normal(0, 0.1, 4)))
-    print(cov_)
-    print([newer.centre_x[0,new_],newer.centre_y[0,new_],newer.roi_width[0,new_],newer.roi_height[0,new_]])
-    print([px,py,pw,ph])
+    cov_ = np.diag([px_var,py_var,pw_var,ph_var] + np.abs(np.random.normal(0, 10**-4, 4)))
+    #print(cov_)
+    #print([newer.centre_x[0,new_],newer.centre_y[0,new_],newer.roi_width[0,new_],newer.roi_height[0,new_]])
+    #print([px,py,pw,ph])
     probability = multivariate_normal.pdf([newer.centre_x[0,new_],newer.centre_y[0,new_],newer.roi_width[0,new_],newer.roi_height[0,new_]],
     mean=[px,py,pw,ph], cov=cov_)
+    #print("Probability is : " + str(probability))
     return probability
 
 def match_ROIs(older, newer, BRISK_,IOU_threshold):
@@ -120,34 +131,49 @@ def match_ROIs(older, newer, BRISK_,IOU_threshold):
     funcprob = {'pred_roi':predict_ROI_probability}
     #'bb_intersection_over_union': bb_intersection_over_union_probabilities,'brisk':BRISK_.get_probabilities}
     matches = np.zeros((len(funcdict.values()),newer.roi.shape[0],older.roi.shape[0]))
+    classes = np.zeros((newer.roi.shape[0],older.roi.shape[0]))
     indices = np.zeros((newer.roi.shape[0]))
 
     for c,method_ in enumerate(funcdict.values()):
         for old_ in range(0,older.roi.shape[0]):
             for new_ in range(0,indices.shape[0]):
                 matches[c,new_,old_] = method_(older,old_,newer,new_)
-    print("Matches are : " + str(matches))
+                if c == 0:
+                    classes[new_,old_] = match_classes(older,old_,newer,new_)
+    #print("Matches are : " + str(matches))
+
     for c,method_ in enumerate(funcprob.values()):
-        matches[c,:,:] = method_(matches[c,:,:])
+        matches[c,:,:] = method_(matches)
+        matches[c,:,:] = np.multiply(matches[c,:,:],classes)
         if c > 0:
             matches[0,:,:] = matches[0,:,:] + matches[c,:,:]
 
     if newer.roi.shape[0] > 0:
-        [final_indices,not_in] = max_index_selector(matches[0,:,:],0.1)
+        [final_indices,not_in] = max_index_selector(matches[0,:,:],0)
     else:
         final_indices = []
         not_in = older.id
-    print("Older ids are : " + str(older.id))
-    print("Matches are : " + str(matches))
-    print("final_indices are : " + str(final_indices))
-    print("not in is " + str(not_in))
-    print("newer_ids are : " + str(newer.id))
+    #print("Older ids are : " + str(older.id))
+    if np.isnan(matches).any() == True:
+        print("###################################################################################################################################################")
+    #print("Matches are : " + str(matches))
+    #print("final_indices are : " + str(final_indices))
+    #print("not in is " + str(not_in))
+    #print("newer_ids are : " + str(newer.id))
     #ADD OLDER ROIS IN THAT AREN'T IN THIS FRAME
     for old_ in not_in:
         if older.lives[old_]-1 > 0:
-            print("Does THis with : " + str(older.lives))
+            #print("Does THis with : " + str(older.lives))
             newer.roi = np.concatenate((newer.roi, older.roi[None,old_,:]), axis=0)
             newer.id = np.concatenate((newer.id,older.id[old_,None]), axis=0)
+            newer.class_ = np.concatenate((newer.class_,older.class_[old_,None]),axis = 0)
+            #print("Newer Class: " + str(newer.class_.shape))
+            #print("Older Class : " + str(older.centre_x[:,old_,None].shape))
+            newer.centre_x = np.concatenate((newer.centre_x,older.centre_x[:,old_,None]),axis = 1)
+            newer.centre_y =  np.concatenate((newer.centre_y,older.centre_y[:,old_,None]),axis = 1)
+            newer.roi_width =  np.concatenate((newer.roi_width,older.roi_width[:,old_,None]),axis = 1)
+            newer.roi_height = np.concatenate((newer.roi_height,older.roi_height[:,old_,None]),axis = 1)
+            newer.predict_next(newer.roi_height.shape[1]-1)
             newer.lives.append(older.lives[old_]-1)
             newer.hist.append(older.hist[old_])
             newer.colours.append(older.colours[old_])
@@ -160,35 +186,21 @@ def match_ROIs(older, newer, BRISK_,IOU_threshold):
             else:
                 newer.masks = np.concatenate([newer.masks,older.masks[:,:,old_,None]],axis = 2)
                 newer.features = np.concatenate([newer.features,older.features[None,old_,:,:,:]],axis = 0)
-    print("newer_ids are : " + str(newer.id))
 
-    '''
-    print("newer_ids are : " + str(newer.id))
-    print(not_in)
-    if len(not_in) > 0 and len(final_indices) > 0:
-        if max(older.id[not_in]) > max(final_indices):
-            print("#3")
-            max_id = max(older.id[not_in])+1
-        else:
-            print("#4")
-            max_id = max(final_indices)+1
-    elif len(final_indices) > 0:
-        print(not_in)
-        print("fi is : " + str(max(final_indices)))
-        max_id = max(final_indices)+1
-    else:
-        max_id = 0'''
-
-    #print("Max id is " + str(max_id))
     #Add objects that were in the older frame
     for c,index in enumerate(final_indices):
         if index < len(older.id):
             newer.id[c] = older.id[index]
             newer.colours[c] = older.colours[index]
+            newer.centre_x[1:,c] = older.centre_x[0:9,index]
+            newer.centre_y[1:,c] =  older.centre_y[0:9,index]
+            newer.roi_width[1:,c] = older.roi_width[0:9,index]
+            newer.roi_height[1:,c] = older.roi_height[0:9,index]
+
             if older.lives[index] < 7:
                 newer.lives[c] = older.lives[index] +1
 
-    print("newer_ids are : " + str(newer.id))
+    #print("newer_ids are : " + str(newer.id))
     max_id = max(newer.id)+1
 
     for c,index in enumerate(final_indices):
@@ -200,9 +212,6 @@ def match_ROIs(older, newer, BRISK_,IOU_threshold):
     #Add new objects that were not in older frame_
     return newer.id,newer
 
-
-def BRISK_matcher(older, newer):
-    print("hello")
 
 #CAN REMOVE MAX INDICES FROM THIS!!
 def max_index_selector(array,threshold):

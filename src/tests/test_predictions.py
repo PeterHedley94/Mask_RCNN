@@ -31,8 +31,21 @@ def get_rois(start = 1):
             test_list_roi.append([test_roi[0]+row,test_roi[1]+col,test_roi[2]+row,test_roi[3]+col])
     return(np.array(test_list_roi))
 
-def get_roi_history(length = 10):
-    res = roi_class(get_rois(length),12,np.arange(nt),cl(nt),mm(nt),mf(nt),10,10)
+def get_noisy_rois(start = 1):
+    test_roi = [start,start,start+1,start+1]
+    test_list_roi = []
+    for row in range(nt):
+        for col in range(nt):
+            noise = np.random.normal(0, 10**-5, 4)
+            test_list_roi.append([test_roi[0]+row+noise[0],test_roi[1]+col+noise[1],
+            test_roi[2]+row+noise[2],test_roi[3]+col+noise[3]])
+    return(np.array(test_list_roi))
+
+def get_roi_history(length = 10,noise=False):
+    if noise:
+        res = roi_class(get_noisy_rois(length),12,np.arange(nt),cl(nt),mm(nt),mf(nt),10,10)
+    else:
+        res = roi_class(get_rois(length),12,np.arange(nt),cl(nt),mm(nt),mf(nt),10,10)
     arr = (np.arange(10)+1.5)[::-1]
     res.centre_x[:length] = np.transpose(np.array([arr,arr+1,arr+2,arr+3]))
     res.centre_y[:length] = np.transpose(np.array([arr,arr+1,arr+2,arr+3]))
@@ -52,8 +65,14 @@ class ComponentTestCase(unittest.TestCase):
     def test_prediction(self):
         res_1 = get_roi_history(10)
         res_2 = roi_class(get_rois(11),12,np.arange(nt),cl(nt),mm(nt),mf(nt),10,10)
-
         print(predict_ROI(res_1,0,res_2,0))
+
+    def test_prediction_sequence(self):
+        res_1 = get_roi_history(10,True)
+        res_2 = roi_class(get_noisy_rois(11),12,np.arange(nt),cl(nt),mm(nt),mf(nt),10,10)
+        print(predict_ROI(res_1,0,res_2,0))
+
+    
 
 
 

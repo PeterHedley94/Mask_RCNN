@@ -181,6 +181,7 @@ class model:
 def main(args):
     '''Initializes and cleanup ros node'''
     path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/gold.avi'
+    #path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/at.avi'
     cap = cv2.VideoCapture(path)
     frame_width = int( cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height =int( cap.get( cv2.CAP_PROP_FRAME_HEIGHT))
@@ -202,11 +203,10 @@ def main(args):
             while(1):
                 ret,frame = cap.read()
                 if ret ==True:
-                    if frame_no > 900:
+                    if frame_no > 0:#28:#900:
                         ic.callback(frame)
-                    else:
-                        print_progress(frame_no,length_video)
-                        frame_no += 1
+                    frame_no += 1
+                    print_progress(frame_no,length_video)
                 else:
                     print("Failed")
                     break
