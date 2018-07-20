@@ -2491,9 +2491,6 @@ class MaskRCNN():
         #detections, mrcnn_class, mrcnn_bbox,mrcnn_mask, rpn_rois, rpn_class, rpn_bbox,pyr =\
         detections, _, _, mrcnn_mask, _, _, _, pyr  =\
             self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
-        print("PYR shape : " + str(pyr.shape))
-        print("Detections shape : " + str(detections.shape))
-        print("Mrcnn_mask shape : " + str(mrcnn_mask.shape))
 
         results = []
         for i, image in enumerate(images):

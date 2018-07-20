@@ -106,6 +106,7 @@ class model:
         # COCO Class names
         # Index of the class in the list is its ID. For example, to get ID of
         # the teddy bear class, use: class_names.index('teddy bear')
+        self.class_indices = [1,2,3,4,6,8]
         self.class_names = ['BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
                        'bus', 'train', 'truck', 'boat', 'traffic light',
                        'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird',
@@ -135,6 +136,13 @@ class model:
         if VERBOSE :
             print("subscribed to /camera/image/compressed")
 
+    def remove_classes(self,r):
+        indices = [True if x in self.class_indices else False for x in r['class_ids']]
+        r['rois'] = r['rois'][np.where(indices)]
+        r['scores'] = r['scores'][np.where(indices)]
+        r['class_ids'] = r['class_ids'][np.where(indices)]
+        r['masks'] = r['masks'][:,:,np.where(indices)[0]]
+
     def mask_predict(self):
         try:
             image = self.buffers["image"][0]
@@ -144,20 +152,14 @@ class model:
             start = time.time()
             with graph.as_default():
                 #results contains ['rois', 'scores', 'class_ids', 'masks']
-                results = self.model.detect([image.frame], verbose=1)
+                results = self.model.detect([image.frame], verbose=0)
 
             # Put resuts in buffer
             r = results[0]
-            print("Mask shape is " + str(r['masks'].shape))
-            print("Features shape is " + str(r['features'].shape))
-
-            des,key = self.BRISK_.get_des_key(image.frame,r['rois'])
+            self.remove_classes(r)
+            des,key = self.BRISK_.get_des_key(image.frame,r['rois'],r['masks'])
             res_ = roi_class(r['rois'],image.time,r['class_ids'],
             visualize.random_colors(r['rois'].shape[0]),r['masks'],r['features'],des=des,key=key)
-            if(res_.roi.shape[0] != len(des)):
-                print("FAILED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
-                print(res_.roi.shape[0])
-                print(len(des))
             #print("Masks Shape is: " + str(len(res_.masks)))
             self.buffer_locks["mask"].acquire()
             self.buffers['mask'].append(res_)
@@ -175,8 +177,6 @@ class model:
         self.buffers["image"].append(image)
         self.mask_predict()
         write_to_video(self.output_videos['combined'],self.buffers['image'][-1].frame,self.buffers['mask'][-1],self.class_names,[self.output_width,self.output_height])
-
-        #self.mask_predict()
 
 def main(args):
     '''Initializes and cleanup ros node'''
@@ -203,7 +203,7 @@ def main(args):
             while(1):
                 ret,frame = cap.read()
                 if ret ==True:
-                    if frame_no > 0:#28:#900:
+                    if frame_no > 900:#900:#28:#900:
                         ic.callback(frame)
                     frame_no += 1
                     print_progress(frame_no,length_video)
