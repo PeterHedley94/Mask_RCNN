@@ -15,6 +15,7 @@ ROOT_DIR = os.path.abspath("./mask_rcnn")
 VERBOSE=False
 #image_buffer
 from utils.image_class import *
+import pickle
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
 from mask_rcnn.mrcnn import utils
@@ -34,6 +35,8 @@ from utils.utils import print_progress
 from utils.visualiser import *
 from Tracking.Tracker import *
 from Tracking.BRISK import *
+
+IMAGE_TIME = 0
 
 
 class InferenceConfig(coco.CocoConfig):
@@ -144,6 +147,7 @@ class model:
         r['masks'] = r['masks'][:,:,np.where(indices)[0]]
 
     def mask_predict(self):
+
         try:
             image = self.buffers["image"][0]
         except IndexError:
@@ -156,6 +160,7 @@ class model:
 
             # Put resuts in buffer
             r = results[0]
+            pickle.dump(r, open(os.path.join("masks",str(image.time) + ".p"), "wb" ) )
             self.remove_classes(r)
             des,key = self.BRISK_.get_des_key(image.frame,r['rois'],r['masks'])
             res_ = roi_class(r['rois'],image.time,r['class_ids'],
@@ -172,8 +177,10 @@ class model:
 
 
     def callback(self,frame):#ros_data):
+        global IMAGE_TIME
         frame_time = time.time()
-        image = image_class(frame,frame_time)
+        image = image_class(frame,IMAGE_TIME)#,frame_time)
+        IMAGE_TIME += 1
         self.buffers["image"].append(image)
         self.mask_predict()
         write_to_video(self.output_videos['combined'],self.buffers['image'][-1].frame,self.buffers['mask'][-1],self.class_names,[self.output_width,self.output_height])
