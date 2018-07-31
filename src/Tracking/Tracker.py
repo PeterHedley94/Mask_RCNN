@@ -4,7 +4,7 @@ sys.path.insert(1,'/usr/local/lib/python3.5/dist-packages')
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
-import math, numpy as np
+import math, numpy as np,time
 np.set_printoptions(precision=3)
 from scipy.stats import multivariate_normal
 from Tracking.BRISK import *
@@ -36,15 +36,26 @@ def Kalman_predict2(older,old_,newer,new_):
     probability_at_mean = multivariate_normal.pdf(p[:4,0],mean=p[:4,0], cov=cov_[:4,:4])
     return probability/probability_at_mean
 
+def tracker_predict(older,old_,newer,new_):
+    bbox = older.tracker_predictions[old_]
+    if bbox == [0,0,0,0]:
+        return 0.1
+    probability = multivariate_normal.pdf([newer.centre_x[new_],newer.centre_y[new_],newer.roi_width[new_],newer.roi_height[new_]],
+        mean=bbox, cov=40*np.eye(4))
+    return probability
+
+def tracker_predict_probability(array):
+    return array
+
 #Scale Kalman output
 def Kalman_predict_probability(array):
     global KALMAN_LIKELIHOOD_THRESHOLD
-    print("Array to kalman prob is ")
-    print(str(array))
+    #print("Array to kalman prob is ")
+    #print(str(array))
     array = KALMAN_LIKELIHOOD_THRESHOLD - array
     array[array < 0] = 0
-    print("Array out of kalman prob is ")
-    print(str(array))
+    #print("Array out of kalman prob is ")
+    #print(str(array))
     return array
 
 #Return % of mean values of new box is at compared to predicted values
@@ -70,6 +81,9 @@ def append_old_rois_not_in_frame(older,newer,not_in):
             newer.roi_width.append(predictions[2])
             newer.roi_height.append(predictions[3])
 
+            newer.tracker.append(older.tracker[old_])
+            newer.tracker_predictions.append([0,0,0,0])
+
             newer.lives.append(older.lives[old_]-1)
             newer.hist.append(older.hist[old_])
             newer.colours.append(older.colours[old_])
@@ -92,11 +106,15 @@ def match_ROIs(older, newer, BRISK_,IOU_threshold):
         return newer.id, newer
 
     #Methods of matching ROIs
-    funcdict = [BRISK_.get_match_score,Kalman_predict]
-    #funcdict = {'Kalman':Kalman_predict}
+    #funcdict = [BRISK_.get_match_score,Kalman_predict]
+    #funcdict = [Kalman_predict]
+    print("Older roi _length " + str(older.roi.shape[0]))
+    print("Older tracker_length " + str(len(older.tracker)))
+    funcdict = [tracker_predict]
     #'bb_intersection_over_union': bb_intersection_over_union,
-    funcprob = [BRISK_.get_probabilities,Kalman_predict_probability]
-    #funcprob = {'Kalman':Kalman_predict_probability}
+    #funcprob = [BRISK_.get_probabilities,Kalman_predict_probability]
+    #funcprob = [Kalman_predict_probability]
+    funcprob = [tracker_predict_probability]
     #'bb_intersection_over_union': bb_intersection_over_union_probabilities,
 
     matches = np.zeros((len(funcdict),newer.roi.shape[0],older.roi.shape[0]))
@@ -104,8 +122,14 @@ def match_ROIs(older, newer, BRISK_,IOU_threshold):
     #print("Order is " + str(funcdict.values()))
     #print("Order is " + str(funcprob.values()))
     #Score the match for each old ROI to each new ROI
+
     for old_ in range(0,older.roi.shape[0]):
         older.kalman[old_].predict()
+
+        #if older.tracker[old_] == None:
+        older.intialise_tracker(old_)
+
+        _,older.tracker_predictions[old_] = older.tracker[old_].update(newer.image)
         for new_ in range(0,indices.shape[0]):
             class_match = match_classes(older,old_,newer,new_)
             for c,method_ in enumerate(funcdict):
@@ -113,25 +137,28 @@ def match_ROIs(older, newer, BRISK_,IOU_threshold):
                     matches[c,new_,old_] = method_(older,old_,newer,new_)
                 else:
                     matches[c,new_,old_] = 0
-    print(matches)
-    print(".............")
+    start = time.time()
+
+    #print(matches)
+    #print(".............")
     #Combine methods
     for c,method_ in enumerate(funcprob):
         matches[c,:,:] = method_(matches[c,:,:])
         if c > 0:
             #matches[0,:,:] = matches[0,:,:] + matches[c,:,:]
             matches[0,:,:] = np.multiply(matches[0,:,:],matches[c,:,:])
-    print(matches)
-    print(".............")
-    print("MAx index theshold is " + str(INDEX_SELECTOR_THRESHOLD))
+    #print(matches)
+    #print(".............")
+    #print("MAx index theshold is " + str(INDEX_SELECTOR_THRESHOLD))
     #Check there are detected objects in new frame
+    #print(matches)
+    #print(".............")
     if newer.roi.shape[0] > 0:
         [final_indices,not_in] = max_index_selector(matches[0,:,:])
     else:
         final_indices = []
-        not_in = older.id
-    print(matches)
-    print(".............")
+        not_in = range(len(older.id))
+
     newer = append_old_rois_not_in_frame(older,newer,not_in)
 
     #Add objects detected in both frames
@@ -142,17 +169,23 @@ def match_ROIs(older, newer, BRISK_,IOU_threshold):
             new_state = np.array([newer.centre_x[c],newer.centre_y[c],newer.roi_width[c],newer.roi_height[c]],dtype = np.float64)
             newer.kalman[c] = older.kalman[index]
             newer.kalman[c].correct(new_state)
+            #newer.tracker[c] = older.tracker[index]
 
             if older.lives[index] < 7:
                 newer.lives[c] = older.lives[index] +1
 
-    max_id = max(newer.id)+1
+    if len(newer.id) > 0:
+        max_id = max(newer.id)+1
+    else:
+        max_id = 0
     #Add objects that only appear in new frame
     for c,index in enumerate(final_indices):
         if index == -1:
             newer.id[c] = max_id
             max_id += 1
 
+    if len(newer.id) != len(set(newer.id)):
+        print("THERE ARE DUPLICATE IDS")
     return newer.id,newer
 
 

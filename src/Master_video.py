@@ -5,15 +5,13 @@ import time, threading,random, math, numpy as np, skimage.io, matplotlib, matplo
 # Ros libraries
 import roslib, rospy,imutils
 # Ros Messages
-from sensor_msgs.msg import Image, CompressedImage
+from sensor_msgs.msg import CompressedImage
 # Root directory of the project
 #RUNNING WITHOUT ROS
-#print(ROOT_DIR)
-#ROOT_DIR = os.path.abspath("./mask_rcnn")
+ROOT_DIR = os.path.abspath("./mask_rcnn")
 #IMAGE_COUNT = 0
-'''RUNNING WITH ROS'''
-ROOT_DIR = os.path.join(os.path.abspath("./"),"src","mask_rcnn","src")
-print(ROOT_DIR)
+#RUNNING WITH ROS
+#ROOT_DIR = os.path.join(os.path.abspath("./"),"src","mask_rcnn","src","mask_rcnn")
 VERBOSE=False
 #image_buffer
 from utils.image_class import *
@@ -27,9 +25,8 @@ import mask_rcnn.mrcnn.model as modellib
 from mask_rcnn.mrcnn import visualize
 
 # Import COCO config
-
-print(os.path.join(ROOT_DIR,"mask_rcnn","samples","coco"))
-sys.path.append(os.path.join(ROOT_DIR,"mask_rcnn","samples","coco"))  # To find local version
+print(os.path.join(ROOT_DIR,"samples","coco"))
+sys.path.append(os.path.join(ROOT_DIR,"samples","coco"))  # To find local version
 import coco
 
 #NEW IMPORTS
@@ -53,7 +50,7 @@ class model:
 
         #Create buffers for threads
         mask_roi_buffer_lock = threading.Lock()
-        self.buffers = {"mask":collections.deque(maxlen=2),"mask_image":collections.deque(maxlen=2),"image":collections.deque(maxlen=1),"camshift":collections.deque(maxlen=2)}
+        self.buffers = {"mask":collections.deque(maxlen=2),"mask_image":collections.deque(maxlen=2),"image":collections.deque(maxlen=2),"camshift":collections.deque(maxlen=2)}
         self.buffer_locks = {"mask":threading.Lock(),'camshift':threading.Lock()}
         self.count = 0
 
@@ -66,7 +63,48 @@ class model:
         self.stop = False
         self.IOU_threshold = 0.3
 
-        self.model_,self.class_indices,self.class_names = None,None,None
+        self.BRISK_ = BRISK_class()
+
+        self.initialise_ros()
+        self.initialise_mrcnn()
+
+    def track(self,type_):
+
+        buff_size = len(self.buffers[type_])
+
+        if buff_size == 1:
+            return self.buffers[type_][0].id
+        elif buff_size == 0:
+            return False
+
+        older = self.buffers[type_][-2]
+        newer = self.buffers[type_][-1]
+        [indices,newer] = match_ROIs(older,newer, self.BRISK_ ,IOU_threshold=0.25)
+        #[indices,newer] = self.match_feature_similarity(older,newer)
+        #newer.id = np.arange(len(newer.id)) +1
+        self.buffers[type_][0] = newer
+
+        return indices
+
+
+    def initialise_mrcnn(self):
+        # Directory to save logs and trained model
+        MODEL_DIR = os.path.join(ROOT_DIR, "logs")
+
+        # Local path to trained weights file
+        COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+        # Download COCO trained weights from Releases if needed
+        if not os.path.exists(COCO_MODEL_PATH):
+            utils.download_trained_weights(COCO_MODEL_PATH)
+
+        config = InferenceConfig()
+        config.display()
+
+        # Create model object in inference mode.
+        self.model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+
+        # Load weights trained on MS-COCO
+        self.model.load_weights(COCO_MODEL_PATH, by_name=True)
 
         # COCO Class names
         # Index of the class in the list is its ID. For example, to get ID of
@@ -88,51 +126,6 @@ class model:
                        'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
                        'teddy bear', 'hair drier', 'toothbrush']
 
-        self.BRISK_ = BRISK_class()
-
-        self.initialise_ros()
-        self.initialise_mrcnn()
-
-    def track(self,type_):
-
-        buff_size = len(self.buffers[type_])
-
-        if buff_size == 1:
-            return self.buffers[type_][0].id
-        elif buff_size == 0:
-            return False
-
-        older = self.buffers[type_][-2]
-        newer = self.buffers[type_][-1]
-        [indices,newer] = match_ROIs(older,newer, self.BRISK_ ,IOU_threshold=0.25)
-        #[indices,newer] = self.match_feature_similarity(older,newer)
-        #newer.id = np.arange(len(newer.id)) +1
-        self.buffers[type_][-2] = newer
-
-        return indices
-
-
-    def initialise_mrcnn(self):
-        # Directory to save logs and trained model
-        MODEL_DIR = os.path.join(ROOT_DIR, "logs")
-
-        # Local path to trained weights file
-        COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
-        # Download COCO trained weights from Releases if needed
-        if not os.path.exists(COCO_MODEL_PATH):
-            utils.download_trained_weights(COCO_MODEL_PATH)
-
-        config = InferenceConfig()
-        config.display()
-
-        # Create model object in inference mode.
-        self.model_ = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
-
-        # Load weights trained on MS-COCO
-        self.model_.load_weights(COCO_MODEL_PATH, by_name=True)
-
-
-
 
     def initialise_ros(self):
         '''Initialize ros publisher, ros subscriber'''
@@ -141,8 +134,8 @@ class model:
         # self.bridge = CvBridge()
 
         # subscribed Topic
-        self.subscriber_image = rospy.Subscriber("/zr300_node/color/image_raw",
-            Image, self.callback,  queue_size = 1)
+        self.subscriber = rospy.Subscriber("/camera/image_raw",
+            CompressedImage, self.callback,  queue_size = 1)
         if VERBOSE :
             print("subscribed to /camera/image/compressed")
 
@@ -154,7 +147,7 @@ class model:
         r['masks'] = r['masks'][:,:,np.where(indices)[0]]
 
     def mask_predict(self):
-        global ROOT_DIR
+
         try:
             image = self.buffers["image"][0]
         except IndexError:
@@ -162,62 +155,88 @@ class model:
         if(image != False):
             start = time.time()
 
-            '''
+            start2 = time.time()
             with graph.as_default():
                 #results contains ['rois', 'scores', 'class_ids', 'masks']
-                results = self.model_.detect([image.frame], verbose=0)
+                results = self.model.detect([image.frame], verbose=0)
+
+            end2 = time.time()
+            print("Predictions took around : " + str(end2-start2))
             # Put resuts in buffer
             r = results[0]
             self.remove_classes(r)
-            '''
-            filename = str(image.time.secs) + "_" +  str(image.time.nsecs) + ".p"
-            print("Current Directory is : " + os.getcwd())
-            #pickle.dump(r, open(os.path.join(ROOT_DIR,"masks",filename), "wb" ))
-            r = pickle.load( open(os.path.join(ROOT_DIR,"masks",filename), "rb" ) )
+            pickle.dump(r, open(os.path.join("masks",str(image.time) + ".p"), "wb" ) )
+            #r = pickle.load( open(os.path.join("masks",str(image.time) + ".p"), "rb" ) )
             des,key = self.BRISK_.get_des_key(image.frame,r['rois'],r['masks'])
+
+            start2 = time.time()
             res_ = roi_class(r['rois'],image.time,r['class_ids'],
             visualize.random_colors(r['rois'].shape[0]),r['masks'],r['features'],des=des,key=key,image=image.frame)
+            end2 = time.time()
+            print("Creating res_ class took around : " + str(end2-start2))
             #print("Masks Shape is: " + str(len(res_.masks)))
             self.buffer_locks["mask"].acquire()
             self.buffers['mask'].append(res_)
             #TRACK from LAST Mask position
-
+            start2 = time.time()
             r['ids'] = self.track('mask')
-
+            end2 = time.time()
+            print("Tracker took around : " + str(end2-start2))
             self.buffer_locks["mask"].release()
-            #print(results)'''
+            #print(results)
             end = time.time()
             print("Took around : " + str(end-start))
 
 
-    def callback(self,ros_data):
+    def callback(self,frame):#ros_data):
         global IMAGE_TIME
-        #print(ros_data.header.stamp)
-        #frame_time = ros_data.header.stamp.secs + ros_data.header.stamp.nsecs/10**9
-        np_arr = np.fromstring(ros_data.data, np.uint8)
-        np_arr = np.reshape(np_arr,(ros_data.height,ros_data.width,3),order = 'C')
-        img = np_arr[...,::-1]
-
-        image = image_class(img,ros_data.header.stamp)
+        frame_time = time.time()
+        image = image_class(frame,IMAGE_TIME)#,frame_time)
         IMAGE_TIME += 1
         self.buffers["image"].append(image)
         self.mask_predict()
-        write_to_video(self.output_videos['combined'],self.buffers['image'][-1].frame,self.buffers['mask'][-2],self.class_names,[self.output_width,self.output_height])
+        write_to_video(self.output_videos['combined'],self.buffers['image'][-1].frame,self.buffers['mask'][-1],self.class_names,[self.output_width,self.output_height])
 
 def main(args):
-    rospy.init_node('mask_rcnn', anonymous=True)
-    frame_width,frame_height = 640,480
+    '''Initializes and cleanup ros node'''
+    path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/gold.avi'
+    #path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/at.avi'
+    cap = cv2.VideoCapture(path)
+    frame_width = int( cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height =int( cap.get( cv2.CAP_PROP_FRAME_HEIGHT))
     ic = model(frame_width,frame_height)
 
-    try:
-        rospy.spin()
-    except KeyboardInterrupt:
-        print ("Shutting down ROS Image feature detector module")
-        ic.stop = True
+    print(os.getcwd())
+    frame_no = 0
 
-    print ("Shutting down ROS Image feature detector module")
-    ic.output_videos['combined'].release()
-    cv2.destroyAllWindows()
+    if(cap.isOpened() == False):
+      print("Failed to get camera")
+    else:
+        length_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        print("Found " + str(length_video) + " images")
+        #rospy.init_node('mask_rcnn', anonymous=True)
+        try:
+            #rospy.spin()
+            print("Located camera")
+            # take first frame of the video
+            while(1):
+                ret,frame = cap.read()
+                if ret ==True:
+                    if frame_no > 900:#900:#28:#900:
+                        ic.callback(frame)
+                    frame_no += 1
+                    print_progress(frame_no,length_video)
+                else:
+                    print("Failed")
+                    break
+
+        except KeyboardInterrupt:
+            print("shutting down")
+            ic.stop = True
+
+        print ("Shutting down ROS Image feature detector module")
+        ic.output_videos['combined'].release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
