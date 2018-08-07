@@ -9,9 +9,10 @@ import cv2
 from Tracking.Kalman import *
 from sensor_msgs.msg import Image
 class image_class:
-    def __init__(self,frame_,time):
+    def __init__(self,frame_,d_,time):
         self.time = time
         self.frame = frame_
+        self.depth = d_
 
 class circular_buffer:
     #Creating a circular buffer for pictures
@@ -29,7 +30,8 @@ class circular_buffer:
             return False
 
 class roi_class:
-    def __init__(self,roi_,time_,class_,colours,mask,features,des,key,image):
+    #removed features
+    def __init__(self,roi_,time_,class_,colours,mask,des,key,image):
 
         self.time = time_
         self.roi = roi_
@@ -38,7 +40,7 @@ class roi_class:
         self.colours = colours
         self.masks = mask
         self.image = image
-        self.features = features
+        #self.features = features
         self.lives = [3] * roi_.shape[0]
         self.class_ = class_
         self.descriptors = des

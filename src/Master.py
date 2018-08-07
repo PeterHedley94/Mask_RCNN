@@ -176,14 +176,12 @@ class model:
             r = pickle.load( open(os.path.join(ROOT_DIR,"masks",filename), "rb" ) )
             des,key = self.BRISK_.get_des_key(image.frame,r['rois'],r['masks'])
             res_ = roi_class(r['rois'],image.time,r['class_ids'],
-            visualize.random_colors(r['rois'].shape[0]),r['masks'],r['features'],des=des,key=key,image=image.frame)
+            visualize.random_colors(r['rois'].shape[0]),r['masks'],r['features'],des=des,key=key)
             #print("Masks Shape is: " + str(len(res_.masks)))
             self.buffer_locks["mask"].acquire()
             self.buffers['mask'].append(res_)
             #TRACK from LAST Mask position
-
             r['ids'] = self.track('mask')
-
             self.buffer_locks["mask"].release()
             #print(results)'''
             end = time.time()

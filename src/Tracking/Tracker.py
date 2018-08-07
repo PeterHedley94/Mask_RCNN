@@ -98,7 +98,7 @@ def append_old_rois_not_in_frame(older,newer,not_in):
                 newer.features = np.concatenate([newer.features,older.features[None,old_,:,:,:]],axis = 0)
     return newer
 
-def match_ROIs(older, newer, BRISK_,IOU_threshold):
+def match_ROIs(older, newer, BRISK_):
 
     #NO OBJECTS IN LAST FRAME
     if(older.roi.shape[0] == 0):

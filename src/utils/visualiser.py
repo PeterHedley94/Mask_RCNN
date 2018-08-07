@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 import os,sys
 sys.path.insert(1,'/usr/local/lib/python3.5/dist-packages')
-import cv2, numpy as np,imutils, random
+import cv2, numpy as np,imutils, random,math
+from utils.pose_visualiser import *
 IMAGE_COUNT = 0
 ROI_IMAGE_COUNT = 0
 
+
+pv = pose_visualiser()
 
 def random_colors(N, bright=True):
     """
@@ -99,21 +102,35 @@ def draw_masks(img,rois):
     return img
 
 
-def construct_frame(raw_image,mrcnn_output,class_names,dims):
-    global IMAGE_COUNT
-    raw = raw_image.copy()
+def construct_frame(raw_image,mrcnn_output,class_names,dims,T_WS_r,T_WS_C,camera_model):
+    global IMAGE_COUNT,pv
+    raw = raw_image.frame.copy()
+    w,h = math.floor(dims[0]/2),math.floor(dims[1]/2)
+
+    #MASKS
     mask_image = raw.copy()
     mask_image = display_instances(mask_image, mrcnn_output.masks,colors=mrcnn_output.colours)
     draw_rects(mask_image,mrcnn_output,class_names)
     cv2.imwrite("progress.jpg",mask_image)
-    image_name = os.path.join("output_images",str(IMAGE_COUNT) + ".jpg")
-    cv2.imwrite(image_name,mask_image)
-    IMAGE_COUNT += 1
-    mask_image = imutils.resize(mask_image,width=dims[0],height=dims[1])
-    return mask_image
+    mask_image = imutils.resize(mask_image,width=w,height=h)
+
+    #POSE
+    pose_image = pv.pose_callback(raw_image.depth.copy(),T_WS_r,T_WS_C,camera_model,w*2,h*2)
+
+    '''
+    #COMBINED
+    total_image = np.zeros((dims[1],dims[0],3),dtype=np.uint8)
+    total_image[0:h,0:w,:] = mask_image
+    total_image[0:h,w:,:] = imutils.resize(raw_image.depth.copy(),width=w,height=h)
+    total_image[h:,0:w,:] = pose_image
+    print(total_image.shape)'''
+    return pose_image
 
 
-def write_to_video(output_video,raw_image,mcrnn_output,class_names,dims):
-    img = construct_frame(raw_image,mcrnn_output,class_names,dims)
-    output_video.write(img)
+def write_to_video(output_video,image,mcrnn_output,class_names,dims,T_WS_r,T_WS_C,camera_model):
+    img = construct_frame(image,mcrnn_output,class_names,dims,T_WS_r,T_WS_C,camera_model)
+    cv2.imshow("i",img)
+    cv2.waitKey(10)
+    print(img.shape)
     cv2.imwrite("image.jpg",img)
+    output_video.write(img)
