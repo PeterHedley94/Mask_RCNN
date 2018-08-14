@@ -4,7 +4,7 @@ FILE FOR BASIC FOLDER AND FILE FOLDER MANIPULATION
 '''
 import os
 import numpy as np
-
+import xml.etree.ElementTree as ET
 import os,sys
 sys.path.insert(1,'/usr/local/lib/python3.5/dist-packages')
 import cv2
@@ -39,6 +39,30 @@ def get_file_names(directory_,string,key = None):
         print("Could not find any Files!")
     images.sort(key=key)
     return images
+
+
+#RETURNS ALL YAML NAMES IN A DIRECTORY
+def get_xml_names(directory_):
+    files = os.listdir(directory_)
+    image_present = False
+    images = []
+    for file in files:
+        if file.endswith('.xml'):
+            images.append(os.path.join(directory_,file))
+            image_present = True
+
+    if not image_present:
+        print("Could not find any xml files!")
+    images.sort()
+    return images
+
+
+def get_array_xml(file):
+    tree = ET.parse(file)
+    rows = tree.find("depth_image").find("rows").text
+    cols = tree.find("depth_image").find("cols").text
+    array = np.fromstring(tree.find("depth_image").find("data").text,sep = " ")
+    return np.reshape(array,(int(rows),int(cols)))
 
 #RETURNS ALL IMAGES NAMES IN A DIRECTORY
 def get_image_names(directory_):

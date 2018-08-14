@@ -66,19 +66,20 @@ class cycle_safe:
         mtx[2,2] = 1
         dist = np.array(self.camera_model["distortion_coefficients"])
         w,h = image.shape[:2]
-        newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
-        new_image = cv2.undistort(image, mtx, dist, None, newcameramtx)
+        #newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+        new_image = cv2.undistort(image, mtx, dist, None,None)# newcameramtx)
         return new_image
 
 
     def callback(self,i,d,T_WS_C,T_WS_r,sb,camera_model):#ros_data):
         global IMAGE_TIME
         frame_time = time.time()
-        undist_image = self.undistort_image(i)
+        undist_image = i#self.undistort_image(i)
         image = image_class(undist_image,d,IMAGE_TIME)#,frame_time)
         IMAGE_TIME += 1
         self.buffers["image"].append(image)
         r,colours = self.model.mask_predict(image)
+
         des,key = self.BRISK_.get_des_key(image.frame,r['rois'],r['masks'])
         res_ = roi_class(r['rois'],image.time,r['class_ids'],
         colours,r['masks'],des=des,key=key,image=image.frame)
@@ -99,15 +100,15 @@ def gd(filename):
 
 def main(args):
     '''Initializes and cleanup ros node'''
-    path = '/home/peter/catkin_ws/devel/lib/okvis_ros/dataset'
+    path = '/home/peter/Documents/okvis_drl/build/dataset'
     #path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/at.avi'
 
     images = get_image_names(path+"/cam0/data")
     print(images)
-    depth_images = get_image_names(path+"/cam1/data")
-    o_T_WS_C = get_file_names(os.path.join(path,"okvis"),"T_WS_C.txt",to_number)
-    o_T_WS_r = get_file_names(os.path.join(path,"okvis"),"T_WS_r.txt",to_number)
-    o_sb = get_file_names(os.path.join(path,"okvis"),"sb.txt",to_number)
+    depth_images = get_xml_names(path+"/cam1/data")
+    o_T_WS_C = get_file_names(os.path.join(path,"pose"),"T_WS_C.txt",to_number)
+    o_T_WS_r = get_file_names(os.path.join(path,"pose"),"T_WS_r.txt",to_number)
+    o_sb = get_file_names(os.path.join(path,"pose"),"sb.txt",to_number)
 
     #cap = cv2.VideoCapture(path)
     frame_width = get_image(images[0]).shape[1]
@@ -123,7 +124,7 @@ def main(args):
 
     for i,d,T_WS_C,T_WS_r,sb in zip(images,depth_images,o_T_WS_C,o_T_WS_r,o_sb):
         print([i,d,T_WS_C,T_WS_r,sb])
-        ic.callback(get_image(i),get_image(d),gd(T_WS_C),gd(T_WS_r),gd(sb),camera_model)
+        ic.callback(get_image(i),get_array_xml(d),gd(T_WS_C),gd(T_WS_r),gd(sb),camera_model)
         print("###############################")
 
 

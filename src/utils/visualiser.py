@@ -102,10 +102,23 @@ def draw_masks(img,rois):
     return img
 
 
+def get_depth_plot(array):
+    h,w = array.shape
+    array2 = np.zeros((h,w))
+    cv2.normalize(array,array2,0,255,cv2.NORM_MINMAX)
+    nice_array = np.zeros((h,w,3))
+    for channel in range(3):
+        nice_array[:,:,channel] = array2
+    return nice_array
+
+
 def construct_frame(raw_image,mrcnn_output,class_names,dims,T_WS_r,T_WS_C,camera_model):
     global IMAGE_COUNT,pv
     raw = raw_image.frame.copy()
     w,h = math.floor(dims[0]/2),math.floor(dims[1]/2)
+
+    print("Width is " + str(w))
+    print("Height is " + str(h))
 
     #MASKS
     mask_image = raw.copy()
@@ -115,16 +128,16 @@ def construct_frame(raw_image,mrcnn_output,class_names,dims,T_WS_r,T_WS_C,camera
     mask_image = imutils.resize(mask_image,width=w,height=h)
 
     #POSE
-    pose_image = pv.pose_callback(raw_image.depth.copy(),T_WS_r,T_WS_C,camera_model,w*2,h*2)
+    pose_image = pv.pose_callback(raw_image.depth.copy(),T_WS_r,T_WS_C,camera_model,w,h)
 
-    '''
+
     #COMBINED
     total_image = np.zeros((dims[1],dims[0],3),dtype=np.uint8)
     total_image[0:h,0:w,:] = mask_image
-    total_image[0:h,w:,:] = imutils.resize(raw_image.depth.copy(),width=w,height=h)
+    total_image[0:h,w:,:] = imutils.resize(get_depth_plot(raw_image.depth.copy()),width=w,height=h)
     total_image[h:,0:w,:] = pose_image
-    print(total_image.shape)'''
-    return pose_image
+    print(total_image.shape)
+    return total_image
 
 
 def write_to_video(output_video,image,mcrnn_output,class_names,dims,T_WS_r,T_WS_C,camera_model):

@@ -92,10 +92,10 @@ def append_old_rois_not_in_frame(older,newer,not_in):
 
             if newer.masks.shape[2] == 0:
                 newer.masks = older.masks[:,:,old_,None]
-                newer.features = older.features[None,old_,:,:,:]
+                #newer.features = older.features[None,old_,:,:,:]
             else:
                 newer.masks = np.concatenate([newer.masks,older.masks[:,:,old_,None]],axis = 2)
-                newer.features = np.concatenate([newer.features,older.features[None,old_,:,:,:]],axis = 0)
+                #newer.features = np.concatenate([newer.features,older.features[None,old_,:,:,:]],axis = 0)
     return newer
 
 def match_ROIs(older, newer, BRISK_):

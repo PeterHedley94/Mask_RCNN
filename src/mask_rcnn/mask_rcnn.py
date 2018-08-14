@@ -73,24 +73,41 @@ class model:
         # Load weights trained on MS-COCO
         self.model_.load_weights(COCO_MODEL_PATH, by_name=True)
 
-
-    def remove_classes(self,r):
-        indices = [True if x in self.class_indices else False for x in r['class_ids']]
+    def remove_indices(self,r,indices):
         r['rois'] = r['rois'][np.where(indices)]
         r['scores'] = r['scores'][np.where(indices)]
         r['class_ids'] = r['class_ids'][np.where(indices)]
         r['masks'] = r['masks'][:,:,np.where(indices)[0]]
+        return r
+
+
+    def remove_classes(self,r):
+        indices = [True if x in self.class_indices else False for x in r['class_ids']]
+        return remove_indices(r,indices)
+
+
+    def remove_zero_area(self,r):
+        indices = [True if roi[2]-roi[0]==0 or roi[3]-roi[1]==0 else False for roi in r['rois']]
+        '''
+        for roi in r['rois']:
+            if roi[2] - roi[0] == 0 or roi[2] - roi[0] == 0:
+                indices.append(True)
+            else:
+                indices.append(False)'''
+        return remove_indices(r,indices)
+
+
 
     def mask_predict(self,image):
-
-        with graph.as_default():
-            #results contains ['rois', 'scores', 'class_ids', 'masks']
-            results = self.model_.detect([image.frame], verbose=0)
-        # Put resuts in buffer
-        r = results[0]
-        self.remove_classes(r)
-
-        filename = str(image.time) + ".p"#.secs) + "_" +  str(image.time.nsecs) + ".p"
-        pickle.dump(r, open(os.path.join(ROOT_DIR,"masks",filename), "wb" ))
-        #r = pickle.load( open(os.path.join(ROOT_DIR,"masks",filename), "rb" ) )
+        filename = str(image.time) + ".p"
+        if not os.path.exists(os.path.join(ROOT_DIR,"masks",filename)):
+            with graph.as_default():
+                #results contains ['rois', 'scores', 'class_ids', 'masks']
+                results = self.model_.detect([image.frame], verbose=0)
+            # Put resuts in buffer
+            r = results[0]
+            self.remove_classes(r)
+            pickle.dump(r, open(os.path.join(ROOT_DIR,"masks",filename), "wb" ))
+        else:
+            r = pickle.load( open(os.path.join(ROOT_DIR,"masks",filename), "rb" ) )
         return [r,visualize.random_colors(r['rois'].shape[0])]

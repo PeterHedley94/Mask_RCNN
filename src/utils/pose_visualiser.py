@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import rospy
 import sys,threading
-import time
+import time,math
 from collections import deque
 print(sys.version)
 from std_msgs.msg import String
@@ -87,21 +87,25 @@ class pose_visualiser:
         else:
             return np.zeros((h,w,3),dtype=np.uint8)
 
-    def plot_axes(self):
+    def plot_axes(self,line_length):
+
         #X Axes
-        x_x,x_y = [self.xpoints[-1],self.xpoints[-1]+self.T_WS_C[0,0]],[self.ypoints[-1],self.ypoints[-1]+self.T_WS_C[1,0]]
-        x_z = [self.zpoints[-1],self.zpoints[-1]+self.T_WS_C[2,0]]
+        length = math.sqrt(self.T_WS_C[0,0]**2 + self.T_WS_C[1,0]**2 + self.T_WS_C[2,0]**2)
+        x_x,x_y = [self.xpoints[-1],self.xpoints[-1]+self.T_WS_C[0,0]*length/line_length],[self.ypoints[-1],self.ypoints[-1]+self.T_WS_C[1,0]*length/line_length]
+        x_z = [self.zpoints[-1],self.zpoints[-1]+self.T_WS_C[2,0]*length/line_length]
         print("X points are : " + str([x_x,x_y,x_z]))
         self.ax.plot3D(x_x,x_y,x_z, 'b-',linewidth=2)
 
         #Y Axes
-        y_x,y_y = [self.xpoints[-1],self.xpoints[-1]+self.T_WS_C[0,1]],[self.ypoints[-1],self.ypoints[-1]+self.T_WS_C[1,1]]
-        y_z = [self.zpoints[-1],self.zpoints[-1]+self.T_WS_C[2,1]]
+        length = math.sqrt(self.T_WS_C[0,2]**2 + self.T_WS_C[1,2]**2 + self.T_WS_C[2,2]**2)
+        y_x,y_y = [self.xpoints[-1],self.xpoints[-1]+self.T_WS_C[0,1]*length/line_length],[self.ypoints[-1],self.ypoints[-1]+self.T_WS_C[1,1]*length/line_length]
+        y_z = [self.zpoints[-1],self.zpoints[-1]+self.T_WS_C[2,1]*length/line_length]
         self.ax.plot3D(y_x,y_y,y_z, 'g-',linewidth=2)
 
         #Z Axes
-        z_x,z_y = [self.xpoints[-1],self.xpoints[-1]+self.T_WS_C[0,2]],[self.ypoints[-1],self.ypoints[-1]+self.T_WS_C[1,2]]
-        z_z = [self.zpoints[-1],self.zpoints[-1]+self.T_WS_C[2,2]]
+        length = math.sqrt(self.T_WS_C[0,2]**2 + self.T_WS_C[1,2]**2 + self.T_WS_C[2,2]**2)
+        z_x,z_y = [self.xpoints[-1],self.xpoints[-1]+self.T_WS_C[0,2]*length/line_length],[self.ypoints[-1],self.ypoints[-1]+self.T_WS_C[1,2]*length/line_length]
+        z_z = [self.zpoints[-1],self.zpoints[-1]+self.T_WS_C[2,2]*length/line_length]
         self.ax.plot3D(z_x,z_y,z_z, 'r-',linewidth=2)
 
     def check_max(self,point):
@@ -112,9 +116,9 @@ class pose_visualiser:
         self.pointcloud = []
         for row in range(depth.shape[0]):
             for col in range(depth.shape[1]):
-                if depth[row,col,0] > 0:
+                if depth[row,col] > 0:
                     point = np.zeros((4,1))
-                    point[:,0] = [col+1,row+1,depth[row,col,0],1]
+                    point[:,0] = [col+1,row+1,depth[row,col],1]
                     arr = np.concatenate((self.T_WS_C,self.T_WS_r[:,None]),axis = 1)
                     self.pointcloud.append(np.matmul(arr,point)*camera_model["depth_baseline"])
                     #print("The point location in 3d is : " + str(td_loc))
@@ -128,21 +132,21 @@ class pose_visualiser:
     def visualise(self,depth,camera_model,h,w):
         self.ax.cla()
         #self.locks['position'].acquire()
-        '''
+
         self.ax.set_xlim([min(self.xpoints),max(self.xpoints)])
         self.ax.set_ylim([min(self.ypoints),max(self.ypoints)])
-        self.ax.set_zlim([min(self.zpoints),max(self.zpoints)])'''
+        self.ax.set_zlim([min(self.zpoints),max(self.zpoints)])
         #self.ax.set_xlim([-5,5])
         #self.ax.set_ylim([-5,5])
         #self.ax.set_zlim([-5,5])
         line1, = self.ax.plot3D(self.xpoints,self.ypoints,self.zpoints, 'k-')
-        self.get_points(depth,camera_model,h,w)
-        self.plot_points()
-        self.plot_axes()
+        #self.get_points(depth,camera_model,h,w)
+        #self.plot_points()
+        self.plot_axes((max(self.xpoints)-min(self.xpoints))*0.05)
         #self.locks['position'].release()
         self.fig.canvas.draw()
         width, height = self.fig.get_size_inches() * self.fig.get_dpi()
         image = np.fromstring(self.fig.canvas.tostring_rgb(), dtype='uint8').reshape(int(height),int(width),3)
-        print("Len points is " + str(len(self.pointcloud)))
+        #print("Len points is " + str(len(self.pointcloud)))
         self.fig.canvas.flush_events()
         return image
