@@ -3,11 +3,10 @@ import os,sys
 sys.path.insert(1,'/usr/local/lib/python3.5/dist-packages')
 import cv2, numpy as np,imutils, random,math
 from utils.pose_visualiser import *
+from utils.object_map_visualiser import *
 IMAGE_COUNT = 0
 ROI_IMAGE_COUNT = 0
 
-
-pv = pose_visualiser()
 
 def random_colors(N, bright=True):
     """
@@ -65,12 +64,14 @@ def display_instances(image, masks,colors=None,show_mask=True,
 
     return masked_image.astype(np.uint8)
 
-def draw_rectangle(img,centre_x,centre_y,width,height, color):
+def x_y_from_cx_cy(array):
+    centre_x,centre_y,width,height = array
     pt1 = (int(centre_x-width/2),int(centre_y-height/2))
     pt2 = (int(centre_x+width/2),int(centre_y+height/2))
-    cv2.rectangle(img,pt1,pt2,color)
+    return pt1,pt2
 
-def draw_rects(img,rois,class_names):
+
+def draw_rects(img,m_,class_names):
     global ROI_IMAGE_COUNT
     font = cv2.FONT_HERSHEY_SIMPLEX
     bottomLeftCornerOfText = (10,500)
@@ -78,25 +79,44 @@ def draw_rects(img,rois,class_names):
     fontColor=(255,255,255)
     lineType=2
 
-    for lives,roi,id,class_,colour,key1,kalman in zip(rois.lives,rois.roi,rois.id,rois.class_,rois.colours,rois.keypoints,rois.kalman):
+    for i in range(m_.no_rois):
+        #lives,roi,id,class_,colour,key1,kalman
+        #,mrcnn_out.roi_dims_c,mrcnn_out.id,mrcnn_out.colours,mrcnn_out.keypoints,mrcnn_out.kalman
         ''''ry1, rx1, ry2, rx2'''
-        if(lives > -100 and class_ in [1,2,3,4,5,6,7,8]):
-            pos_ = (roi[1]+2,roi[0]+10)
-            cv2.drawKeypoints(img[roi[0]:roi[2],roi[1]:roi[3]], key1,img[roi[0]:roi[2],roi[1]:roi[3]],(0,255,255))
-            cv2.rectangle(img,(roi[1],roi[0]),(roi[3],roi[2]),colour)
-            state = kalman.statePre
-            pos_2 = (int(state[0]-state[2]/2)+2,int(state[1]-state[3]/2)+10)
-            draw_rectangle(img,state[0],state[1],state[2],state[3],(0,255,0))
-            text_ = str(id)#class_names[class_] + " : " + str(id)
-            cv2.putText(img,text_, pos_2, font,fontScale, (0,255,0), thickness = 1)
-            #image_name = os.path.join("output_rois",str(ROI_IMAGE_COUNT) + ".jpg")
-            #cv2.imwrite(image_name,img[roi[0]:roi[2],roi[1]:roi[3]])
-            ROI_IMAGE_COUNT += 1
-            cv2.putText(img,text_, pos_, font,
-            fontScale, fontColor, thickness = 1)
+        if(m_.lives[i] > -100 and m_.class_[i] in [1,2,3,4,5,6,7,8]):
+            pt1,pt2 = x_y_from_cx_cy(m_.roi_dims_c[[0,1,4,5],i])
+            pos_ = np.array(pt1)
+            pos_ = (pos_[0]+2,pos_[1]+10)
+            cv2.rectangle(img,pt1,pt2,(0,0,0))
+            cv2.putText(img,str(m_.id[i]), pos_, font,fontScale, fontColor, thickness = 1)
 
-def draw_masks(img,rois):
-    for lives,mask,colour,class_ in zip(rois.lives,rois.masks,rois.colours,rois.class_):
+            k_c_x,k_c_y = m_.world_to_camera(m_.kalman[i].statePre[:3])[:2]#.append(kalman.statePre[[4,5]])
+            k_w,k_h = m_.kalman[i].statePre[[3,4]]
+            pt1,pt2 = x_y_from_cx_cy([k_c_x,k_c_y,k_w,k_h])
+            pos_ = np.array(pt1)
+            pos_ = (pos_[0]+2,pos_[1]+10)
+            cv2.rectangle(img,pt1,pt2,(0,255,0))
+            cv2.putText(img,str(m_.id[i]), pos_, font,fontScale, (0,255,0), thickness = 1)
+
+def draw_depth_text(img,m_):
+    global ROI_IMAGE_COUNT
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    bottomLeftCornerOfText = (10,500)
+    fontScale = 0.8
+    fontColor=(0,0,255)
+    lineType=2
+
+    for i in range(m_.no_rois):
+        #lives,roi,id,class_,colour,key1,kalman
+        #,mrcnn_out.roi_dims_c,mrcnn_out.id,mrcnn_out.colours,mrcnn_out.keypoints,mrcnn_out.kalman
+        ''''ry1, rx1, ry2, rx2'''
+        if(m_.lives[i] > -100 and m_.class_[i] in [1,2,3,4,5,6,7,8]):
+            pt = tuple([int(m_.roi_dims_c[[0],i]),int(m_.roi_dims_c[[1],i])])
+            cv2.putText(img,str(round(m_.depth_rois[i],2)), pt, font,fontScale, fontColor, thickness = 3)
+
+
+def draw_masks(img,mrcnn_out):
+    for lives,mask,colour,class_ in zip(mrcnn_out.lives,mrcnn_out.masks,mrcnn_out.colours,mrcnn_out.class_):
         if(lives > 0 and class_ in [1,2,3,4,5,6,7,8]):
             img = apply_mask(img, mask, colour)
     return img
@@ -108,42 +128,53 @@ def get_depth_plot(array):
     cv2.normalize(array,array2,0,255,cv2.NORM_MINMAX)
     nice_array = np.zeros((h,w,3))
     for channel in range(3):
-        nice_array[:,:,channel] = array2
+        nice_array[:,:,channel] = array
     return nice_array
 
+class visualiser:
+    def __init__(self,w,h):
+        self.w = w
+        self.h = h
+        self.pv = pose_visualiser(int(w),int(h*2/3))
+        self.ov = obj_map_visualiser(int(w),int(h*2/3))
 
-def construct_frame(raw_image,mrcnn_output,class_names,dims,T_WS_r,T_WS_C,camera_model):
-    global IMAGE_COUNT,pv
-    raw = raw_image.frame.copy()
-    w,h = math.floor(dims[0]/2),math.floor(dims[1]/2)
+    def construct_frame(self,mrcnn_output,class_names,T_WS_r,T_WS_C,camera_model):
+        global IMAGE_COUNT,pv
+        raw = mrcnn_output.image.copy()
+        w,h = int(self.w/2), int(self.h/3)
 
-    print("Width is " + str(w))
-    print("Height is " + str(h))
+        #MASKS
+        mask_image = raw.copy()
+        mask_image = display_instances(mask_image, mrcnn_output.masks,colors=mrcnn_output.colours)
+        draw_rects(mask_image,mrcnn_output,class_names)
+        cv2.imwrite("progress.jpg",mask_image)
+        mask_image = imutils.resize(mask_image,width=w,height=h)
 
-    #MASKS
-    mask_image = raw.copy()
-    mask_image = display_instances(mask_image, mrcnn_output.masks,colors=mrcnn_output.colours)
-    draw_rects(mask_image,mrcnn_output,class_names)
-    cv2.imwrite("progress.jpg",mask_image)
-    mask_image = imutils.resize(mask_image,width=w,height=h)
-
-    #POSE
-    pose_image = pv.pose_callback(raw_image.depth.copy(),T_WS_r,T_WS_C,camera_model,w,h)
-
-
-    #COMBINED
-    total_image = np.zeros((dims[1],dims[0],3),dtype=np.uint8)
-    total_image[0:h,0:w,:] = mask_image
-    total_image[0:h,w:,:] = imutils.resize(get_depth_plot(raw_image.depth.copy()),width=w,height=h)
-    total_image[h:,0:w,:] = pose_image
-    print(total_image.shape)
-    return total_image
+        #POSE
+        self.pv.add_points(T_WS_r)
+        pose_image = self.pv.plot(mrcnn_output.roi_dims_w[:2,:])
+        self.ov.set_limits(self.pv.xlims,self.pv.ylims)
+        pose_image = self.ov.plot(pose_image,mrcnn_output,class_names)
 
 
-def write_to_video(output_video,image,mcrnn_output,class_names,dims,T_WS_r,T_WS_C,camera_model):
-    img = construct_frame(image,mcrnn_output,class_names,dims,T_WS_r,T_WS_C,camera_model)
-    cv2.imshow("i",img)
-    cv2.waitKey(10)
-    print(img.shape)
-    cv2.imwrite("image.jpg",img)
-    output_video.write(img)
+        #DEPTH IMAGE
+        depth_image = get_depth_plot(mrcnn_output.depth.copy())
+        depth_image = display_instances(depth_image, mrcnn_output.masks,colors=mrcnn_output.colours)
+        draw_depth_text(depth_image,mrcnn_output)
+
+        #COMBINED
+        total_image = np.zeros((self.h,self.w,3),dtype=np.uint8)
+        total_image[0:h,0:w,:] = mask_image
+        total_image[0:h,w:,:] = imutils.resize(depth_image,width=w,height=h)
+        total_image[h:,:,:] = pose_image
+        print(total_image.shape)
+        return total_image
+
+
+    def write_to_video(self,output_video,mcrnn_output,class_names,T_WS_r,T_WS_C,camera_model):
+        img = self.construct_frame(mcrnn_output,class_names,T_WS_r,T_WS_C,camera_model)
+        cv2.imshow("i",img)
+        cv2.waitKey(1)
+        print(img.shape)
+        cv2.imwrite("image.jpg",img)
+        output_video.write(img)

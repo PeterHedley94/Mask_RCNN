@@ -42,6 +42,7 @@ class cycle_safe:
         self.stop = False
         self.model = model()
         self.BRISK_ = BRISK_class()
+        self.visualiser_ = visualiser(self.output_width,self.output_height)
 
 
     def track(self,type_):
@@ -61,7 +62,7 @@ class cycle_safe:
 
     def undistort_image(self,image):
         mtx = np.zeros((3,3))
-        mtx[0,0],mtx[1,1] = self.camera_model["focal_length"]
+        mtx[0,0],mtx[1,1] = 1/self.camera_model["focal_length"][0],1/self.camera_model["focal_length"][1]
         mtx[0,1],mtx[0,2] = self.camera_model["principal_point"]
         mtx[2,2] = 1
         dist = np.array(self.camera_model["distortion_coefficients"])
@@ -71,23 +72,20 @@ class cycle_safe:
         return new_image
 
 
-    def callback(self,i,d,T_WS_C,T_WS_r,sb,camera_model):#ros_data):
-        global IMAGE_TIME
-        frame_time = time.time()
+    def callback(self,i,d,T_WS_C,T_WS_r,sb,camera_model,time):#ros_data):
         undist_image = i#self.undistort_image(i)
-        image = image_class(undist_image,d,IMAGE_TIME)#,frame_time)
-        IMAGE_TIME += 1
+        image = image_class(undist_image,d,time)#,frame_time)
         self.buffers["image"].append(image)
         r,colours = self.model.mask_predict(image)
 
         des,key = self.BRISK_.get_des_key(image.frame,r['rois'],r['masks'])
         res_ = roi_class(r['rois'],image.time,r['class_ids'],
-        colours,r['masks'],des=des,key=key,image=image.frame)
+        colours,r['masks'],des=des,key=key,image=image.frame,depth = d,pose =[T_WS_C,T_WS_r,sb],camera_model=self.camera_model)
 
         self.buffers['mask'].append(res_)
         self.track('mask')
-        write_to_video(self.output_videos['combined'],self.buffers['image'][-1],self.buffers['mask'][-1],
-        self.model.class_names,[self.output_width,self.output_height],T_WS_r,T_WS_C,camera_model)
+        self.visualiser_.write_to_video(self.output_videos['combined'],self.buffers['mask'][-1],
+        self.model.class_names,T_WS_r,T_WS_C,camera_model)
 
 
 def to_number(item):
@@ -98,9 +96,25 @@ def to_number(item):
 def gd(filename):
     return np.loadtxt(filename)
 
+def get_time_from_filename(filename):
+    return float(filename.split("/")[-1].split(".")[0])
+
+def get_nearest_pose(time,filenames):
+    time = get_time_from_filename(time)
+    for i,name in enumerate(filenames):
+        val = float(name.split("/")[-1].split("_")[0])
+        if val >= time and i==0:
+            return i
+        elif val>= time:
+            if val-time > time- float(filenames[-1].split("/")[-1].split("_")[0]):
+                return i-1
+            else:
+                return i
+    return len(filenames)-1
+
 def main(args):
     '''Initializes and cleanup ros node'''
-    path = '/home/peter/Documents/okvis_drl/build/dataset'
+    path = '/home/peter/Documents/okvis_drl/build/tate3_dataset'
     #path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/at.avi'
 
     images = get_image_names(path+"/cam0/data")
@@ -111,8 +125,8 @@ def main(args):
     o_sb = get_file_names(os.path.join(path,"pose"),"sb.txt",to_number)
 
     #cap = cv2.VideoCapture(path)
-    frame_width = get_image(images[0]).shape[1]
-    frame_height = get_image(images[0]).shape[0]
+    frame_width = 480#get_image(images[0]).shape[1]
+    frame_height = 180*3#get_image(images[0]).shape[0]*2
 
     print("Frame width is "  + str(frame_width))
     print("Frame height is "  + str(frame_height))
@@ -122,10 +136,13 @@ def main(args):
 
     ic = cycle_safe(frame_width,frame_height,camera_model)
 
-    for i,d,T_WS_C,T_WS_r,sb in zip(images,depth_images,o_T_WS_C,o_T_WS_r,o_sb):
-        print([i,d,T_WS_C,T_WS_r,sb])
-        ic.callback(get_image(i),get_array_xml(d),gd(T_WS_C),gd(T_WS_r),gd(sb),camera_model)
-        print("###############################")
+    for index,i,d in zip(range(len(images)),images,depth_images):
+        print("Index is " + str(index))
+        if index > 3102:
+            pose = get_nearest_pose(i,o_T_WS_r)
+            T_WS_C,T_WS_r,sb = o_T_WS_C[pose],o_T_WS_r[pose],o_sb[pose]
+            ic.callback(get_image(i),get_array_xml(d),gd(T_WS_C),gd(T_WS_r),gd(sb),camera_model,get_time_from_filename(i))
+            print("###############################")
 
 
 if __name__ == '__main__':

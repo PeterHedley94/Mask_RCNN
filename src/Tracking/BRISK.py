@@ -40,9 +40,13 @@ class BRISK_class:
             IMAGE_COUNT += 1
             key1,des1 = self.brisk.compute(zorro[roi[0]:roi[2],roi[1]:roi[3]],dst)
             '''
-            key1,des1 = self.brisk.detectAndCompute(zorro[roi[0]:roi[2],roi[1]:roi[3]],None)
-            des.append(des1)
-            key.append(key1)
+            try:
+                key1,des1 = self.brisk.detectAndCompute(zorro[roi[0]:roi[2],roi[1]:roi[3]],None)
+                des.append(des1)
+                key.append(key1)
+            except:
+                des.append([])
+                key.append([])
         return des,key
 
     #Return all matches from BRISK
@@ -75,38 +79,3 @@ class BRISK_class:
             return no**2/no_key * math.log(no_key,2)
         else:
             return 0
-
-    '''
-
-    def draw_rectangle(self,img,roi, colour):
-        cv2.rectangle(img,(roi[1],roi[0]),(roi[3],roi[2]),colour,3)
-
-    def get_probabilities(self,array):
-        #1500 is an arbitrary value deemed to be very little resemblence between objects
-        array = (1500-array)/1500
-        array[array<=0] = 10**-3
-        #This method is correct around 0.75 of the time therefore weight accordingly
-        return array*0.75'''
-    '''
-    def get_sum_matches(self,older,old_,newer,new_):
-        sum = 0
-        print("des length is : " + str(len(older.descriptors)))
-        print("Rois shape is " + str(older.roi.shape))
-        print("Old_ is : " + str(old_))
-        print("des length is : " + str(len(newer.descriptors)))
-        print("New is : " + str(new_))
-        matches = self.get_matches(older.descriptors[old_],newer.descriptors[new_])
-        print("BRISK matches are : " + str(matches))
-        # Sort them in the order of their distance.
-        matches = sorted(matches, key = lambda x:x.distance)
-        if len(matches) == 0:
-            #1500 is an arbitrary value deemed to be very little resemblence between objects
-            return 1500
-        elif len(matches) < 10:
-            for i in matches:
-                sum += i.distance
-        else:
-            for i in matches[:10]:
-                sum += i.distance
-        return sum
-    '''

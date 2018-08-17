@@ -83,31 +83,28 @@ class model:
 
     def remove_classes(self,r):
         indices = [True if x in self.class_indices else False for x in r['class_ids']]
-        return remove_indices(r,indices)
+        return self.remove_indices(r,indices)
 
 
     def remove_zero_area(self,r):
-        indices = [True if roi[2]-roi[0]==0 or roi[3]-roi[1]==0 else False for roi in r['rois']]
-        '''
-        for roi in r['rois']:
-            if roi[2] - roi[0] == 0 or roi[2] - roi[0] == 0:
-                indices.append(True)
-            else:
-                indices.append(False)'''
-        return remove_indices(r,indices)
+        indices = [False if roi[2]-roi[0]==0 or roi[3]-roi[1]==0 else True for roi in r['rois']]
+        return self.remove_indices(r,indices)
 
 
 
     def mask_predict(self,image):
         filename = str(image.time) + ".p"
-        if not os.path.exists(os.path.join(ROOT_DIR,"masks",filename)):
+        directory = "tate3_masks"
+        if not os.path.exists(os.path.join(ROOT_DIR,directory,filename)):
             with graph.as_default():
                 #results contains ['rois', 'scores', 'class_ids', 'masks']
                 results = self.model_.detect([image.frame], verbose=0)
             # Put resuts in buffer
             r = results[0]
             self.remove_classes(r)
-            pickle.dump(r, open(os.path.join(ROOT_DIR,"masks",filename), "wb" ))
+            self.remove_zero_area(r)
+            pickle.dump(r, open(os.path.join(ROOT_DIR,directory,filename), "wb" ))
         else:
-            r = pickle.load( open(os.path.join(ROOT_DIR,"masks",filename), "rb" ) )
+            r = pickle.load( open(os.path.join(ROOT_DIR,directory,filename), "rb" ) )
+            
         return [r,visualize.random_colors(r['rois'].shape[0])]
