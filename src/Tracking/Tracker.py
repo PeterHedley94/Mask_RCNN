@@ -64,12 +64,16 @@ def match_ROIs(older, newer, BRISK_):
     indices = np.zeros((newer.no_rois))
 
     for old_ in range(0,older.no_rois):
+        #print("Kalman number " +str(old_) + " state prior is " + str(older.kalman[old_].statePost))
         older.kalman[old_].predict()
-
+        #print("Kalman number " +str(old_) + " prediction is " + str(older.kalman[old_].statePre))
         #if older.tracker[old_] == None:
         older.intialise_tracker(old_)
 
-        _,older.tracker_predictions[old_] = older.tracker[old_].update(newer.image)
+        try:
+            _,older.tracker_predictions[old_] = older.tracker[old_].update(newer.image)
+        except:
+            older.tracker_predictions[old_] = older.roi_dims_c[[0,1,4,5],old_].tolist()
         for new_ in range(0,indices.shape[0]):
             class_match = match_classes(older,old_,newer,new_)
             for c,method_ in enumerate(funcdict):
@@ -78,9 +82,9 @@ def match_ROIs(older, newer, BRISK_):
                 else:
                     matches[c,new_,old_] = 0
     start = time.time()
-
-    #print(matches)
-    #print(".............")
+    '''
+    print(matches)
+    print(".............")'''
     #Combine methods
     for c,method_ in enumerate(funcprob):
         matches[c,:,:] = method_(matches[c,:,:])

@@ -34,7 +34,7 @@ class model:
         # COCO Class names
         # Index of the class in the list is its ID. For example, to get ID of
         # the teddy bear class, use: class_names.index('teddy bear')
-        self.class_indices = [1,2,3,4,6,8]
+        self.class_indices = [40]#[1,2,3,4,6,8]
         self.class_names = ['BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
                        'bus', 'train', 'truck', 'boat', 'traffic light',
                        'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird',
@@ -87,9 +87,8 @@ class model:
 
 
     def remove_zero_area(self,r):
-        indices = [False if roi[2]-roi[0]==0 or roi[3]-roi[1]==0 else True for roi in r['rois']]
+        indices = [False if abs(roi[2]-roi[0])<=20 or abs(roi[3]-roi[1])<=20 else True for roi in r['rois']]
         return self.remove_indices(r,indices)
-
 
 
     def mask_predict(self,image):
@@ -106,5 +105,5 @@ class model:
             pickle.dump(r, open(os.path.join(ROOT_DIR,directory,filename), "wb" ))
         else:
             r = pickle.load( open(os.path.join(ROOT_DIR,directory,filename), "rb" ) )
-            
+
         return [r,visualize.random_colors(r['rois'].shape[0])]

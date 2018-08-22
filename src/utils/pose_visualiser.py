@@ -32,18 +32,32 @@ class pose_visualiser:
         points[:self.count,1] = (self.height/2) - (points[:self.count,1]*self.scale)/2
         return points[:self.count,:]
 
-    def plot(self,objects):
+
+    def plot_bike_path(self,cycle_model):
+        array = np.zeros((2,10))
+        count = 1
+        for i in range(0,10,1):
+            x,y,z = cycle_model.predict(float(i+1))
+            array[:,i] = x,y
+            count += 1
+
+        to_plot = self.image_coords(array[:,:count].transpose())
+        cv2.polylines(self.image,np.int32([to_plot]),False,(255,0,255),1)
+
+    def plot(self,objects,cycle_model):
         self.image = np.zeros((self.height,self.width,3))
 
-        objects = objects[:,objects[1,:]<30]
-        objects = objects[:,objects[0,:]<30]
-        objects = objects[:,objects[1,:]>-30]
-        objects = objects[:,objects[0,:]>-30]
+        objects = objects[:,objects[1,:]<self.points[-1,1]+50]
+        objects = objects[:,objects[0,:]<self.points[-1,0]+50]
+        objects = objects[:,objects[1,:]>self.points[-1,1]-50]
+        objects = objects[:,objects[0,:]>self.points[-1,0]-50]
 
-        self.xlims = [min(self.points[:,0]),max(self.points[:,0])]
-        self.ylims = [min(self.points[:,1]),max(self.points[:,1])]
+        self.xlims = [min(min(self.points[:,0]),self.xlims[0]),max(max(self.points[:,0]),self.xlims[1])]
+        self.ylims = [min(min(self.points[:,1]),self.ylims[0]),max(max(self.points[:,1]),self.ylims[1])]
 
         self.objects = np.concatenate([objects,self.objects], axis = 1)
+
+
 
         if objects.shape[1] > 0:
             if self.xlims[0] > min(self.objects[0,:]):
@@ -60,7 +74,7 @@ class pose_visualiser:
         self.xlims[1] = max(self.xlims[1],10**-3)
         self.ylims[0] = min(self.ylims[0],-10**-3)
         self.ylims[1] = max(self.ylims[1],10**-3)
-        print("Limits are " + str(self.xlims) + " : " + str(self.ylims))
+        #print("Limits are " + str(self.xlims) + " : " + str(self.ylims))
         xscale = self.width/(self.xlims[1] - self.xlims[0])
         yscale = self.height/(self.ylims[1] - self.ylims[0])
         if xscale < yscale:
@@ -73,4 +87,6 @@ class pose_visualiser:
             cv2.polylines(self.image,np.int32([to_plot]),False,(255,255,255),1)
         #cv2.imshow('m',self.image)
         #cv2.waitKey(2)
+
+        self.plot_bike_path(cycle_model)
         return self.image

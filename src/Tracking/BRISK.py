@@ -40,6 +40,9 @@ class BRISK_class:
             IMAGE_COUNT += 1
             key1,des1 = self.brisk.compute(zorro[roi[0]:roi[2],roi[1]:roi[3]],dst)
             '''
+            #image_name = os.path.join("rois",str(IMAGE_COUNT) + ".jpg")
+            #cv2.imwrite(image_name,zorro[roi[0]:roi[2],roi[1]:roi[3]])
+            #IMAGE_COUNT += 1
             try:
                 key1,des1 = self.brisk.detectAndCompute(zorro[roi[0]:roi[2],roi[1]:roi[3]],None)
                 des.append(des1)

@@ -21,6 +21,8 @@ from utils.utils import print_progress
 from utils.visualiser import *
 from Tracking.Tracker import *
 from Tracking.BRISK import *
+from MovementModels.cyclist_model import *
+
 
 IMAGE_TIME = 0
 
@@ -37,12 +39,13 @@ class cycle_safe:
         self.output_width = im_width
         self.output_height = im_height
         self.output_writers = {"combined":cv2.VideoWriter_fourcc(*'XVID')}
-        self.output_videos = {"combined":cv2.VideoWriter('combined.avi',self.output_writers["combined"], 20.0, (self.output_width,self.output_height))}
+        self.output_videos = {"combined":cv2.VideoWriter('combined.avi',self.output_writers["combined"], 30.0, (self.output_width,self.output_height))}
         self.camshift_update = False
         self.stop = False
         self.model = model()
         self.BRISK_ = BRISK_class()
         self.visualiser_ = visualiser(self.output_width,self.output_height)
+        self.cm = cycle_model()
 
 
     def track(self,type_):
@@ -84,8 +87,10 @@ class cycle_safe:
 
         self.buffers['mask'].append(res_)
         self.track('mask')
+
+        self.cm.add_points([T_WS_C,T_WS_r,sb],time)
         self.visualiser_.write_to_video(self.output_videos['combined'],self.buffers['mask'][-1],
-        self.model.class_names,T_WS_r,T_WS_C,camera_model)
+        self.model.class_names,T_WS_r,T_WS_C,camera_model,self.cm)
 
 
 def to_number(item):
@@ -138,7 +143,7 @@ def main(args):
 
     for index,i,d in zip(range(len(images)),images,depth_images):
         print("Index is " + str(index))
-        if index > 3102:
+        if index > 0:#index > 87 and index < 89: #> 1570 and index <1576:
             pose = get_nearest_pose(i,o_T_WS_r)
             T_WS_C,T_WS_r,sb = o_T_WS_C[pose],o_T_WS_r[pose],o_sb[pose]
             ic.callback(get_image(i),get_array_xml(d),gd(T_WS_C),gd(T_WS_r),gd(sb),camera_model,get_time_from_filename(i))
