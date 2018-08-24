@@ -11,7 +11,7 @@ from sklearn.preprocessing import PolynomialFeatures
 
 from keras.layers import Input, LSTM
 from keras.models import Model
-from data_generator import *
+from MovementModels.data_generator import *
 import keras
 from keras import backend as K
  #set learning phase
@@ -19,41 +19,106 @@ K.set_learning_phase(1)
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Flatten
 from keras.layers import Conv2D, MaxPooling2D
-from keras.optimizers import SGD
+from keras.optimizers import SGD,RMSprop,Adam
 from keras.models import load_model
-from src.callbacks import *
-from src.DATA_PREPARATION.folder_manipulation import *
-from src.NN_MODELS.common_network_operations import *
+from MovementModels.callbacks import *
+from utils.folder_manipulation import *
+from MovementModels.common_network_operations import *
 from keras.layers import TimeDistributed
 
 class CNN_LSTM(object):
-    def __init__(self,output = True,lr=0.01,cached_model= None):
-        self.sequence_length = 5
+    def __init__(self,output = True,lr=0.001,cached_model= None):
         self.model_name = "vgg_net"
         self.output = output
+        number_outputs = 3
+        self.data_dims = [3,4] #3x4 camera matrix
+        self.sequence_length_ = 4
+        self.batch_size = 2
 
+        images = True
+        self.image_height = 480#180
+        self.image_width= 640#240
+        self.no_image_channels=3
+        self.camera_model_location = os.path.join("utils",'test_camera_model.json')
+
+        #Basic working model
+        self.model = Sequential()
+        self.model.add(LSTM(32,return_sequences=True,activation = "linear",input_shape=(self.sequence_length_,self.data_dims[0]*self.data_dims[1])))  # returns a sequence of vectors of dimension 32
+        self.model.add(LSTM(32,activation = "linear"))
+        self.model.add(Dense(number_outputs,activation = "linear"))
+
+        lr = 0.00001
+        sgd = SGD(lr=lr, decay=5e-5, momentum=0.9, nesterov=True)
+        rms = RMSprop(lr=lr, rho=0.9, epsilon=None, decay=0.0)
+        adam = Adam(lr=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
+        self.model.compile(loss='mse', optimizer=sgd)
+
+        '''
         self.cnnmodel = self.get_cnn_model()
         video_input = Input(shape=(self.sequence_length, IM_HEIGHT, IM_WIDTH, NUMBER_CHANNELS))
         encoded_frame_sequence = TimeDistributed(self.cnnmodel)(video_input) # the output will be a sequence of vectors
         encoded_video = LSTM(256)(encoded_frame_sequence)  # the output will be one vector
+        '''
 
-        imu_input = Input(shape=(self.sequence_length,imu_data_dims))
-        self.imumodel = self.get_imu_model()
+        '''
+        self.model = Sequential()
+        self.model.add(LSTM(32, return_sequences=True,
+                       input_shape=(self.sequence_length_, self.data_dims)))  # returns a sequence of vectors of dimension 32
+        #self.model.add(LSTM(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
+        self.model.add(LSTM(32))  # return a single vector of dimension 32
+        self.model.add(Dense(number_outputs))'''
 
-        output = Dense(NUMBER_CLASSES, activation='softmax')(self.imumodel)#([encoded_video,self.imumodel])
-        self.model = Model(inputs=imu_input, outputs=output)
+        '''
+        #BEST SO FAR!!-model2
+        batch_size = 18
+        timesteps = self.sequence_length_
+        data_dim = 13
+
+        self.model = Sequential()
+        self.model.add(LSTM(32, return_sequences=True, stateful=True,
+                       batch_input_shape=(self.batch_size, timesteps, data_dim)))
+        self.model.add(LSTM(32, return_sequences=True, stateful=True))
+        self.model.add(LSTM(32, stateful=True))
+        self.model.add(Dense(3, activation='linear'))
+        #self.model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])'''
+
+
+        #model-3
+        '''
+        pose_input = Input(shape=(self.sequence_length_,self.data_dims))
+        self.model = Sequential()
+        self.model.add(Dense(32,activation='linear',input_shape=(self.sequence_length_,self.data_dims)))
+        self.model.add(Dense(32,activation='linear'))
+        encoded_sequence = TimeDistributed(self.model)(pose_input)
+        total_sequence = LSTM(32)(encoded_sequence)
+        pose_model_output = Dense(3, activation='linear')(total_sequence)
+        output = Dense(number_outputs, activation='linear')(pose_model_output)#([encoded_video,self.imumodel])
+        self.model = Model(inputs=pose_input, outputs=output)
+
+        sgd = SGD(lr=lr, decay=5e-5, momentum=0.9, nesterov=True)
+        rms = RMSprop(lr=lr, rho=0.9, epsilon=None, decay=0.0)
+        adam = Adam(lr=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
+        self.model.compile(loss='mse', optimizer=sgd)'''
+
+        '''
+        pose_input = Input(shape=(self.sequence_length_,self.data_dims))
+        self.posemodel = self.get_pose_model()
+        pose_model_output = self.posemodel(pose_input)
+
+        output = Dense(number_outputs, activation='linear')(pose_model_output)#([encoded_video,self.imumodel])
+        self.model = Model(inputs=pose_input, outputs=output)
 
         if cached_model is not None:
             self.model = load_model(cached_model)
 
         sgd = SGD(lr, decay=1e-6, momentum=0.9, nesterov=True)
-        self.model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+        self.model.compile(loss='mse', optimizer=sgd, metrics=['accuracy'])'''
 
-    def get_imu_model(self):
+    def get_pose_model(self):
         # expected input data shape: (batch_size, timesteps, data_dim)
         model = Sequential()
         model.add(LSTM(32, return_sequences=True,
-                       input_shape=(timesteps, data_dim)))  # returns a sequence of vectors of dimension 32
+                       input_shape=(self.sequence_length_, self.data_dims)))  # returns a sequence of vectors of dimension 32
         model.add(LSTM(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
         model.add(LSTM(32))  # return a single vector of dimension 32
         return model
@@ -71,22 +136,27 @@ class CNN_LSTM(object):
         cnnmodel.add(Flatten())
         return cnnmodel
 
+    #CHANGE BATCH SIZE BACK!!
     def train(self,train_directory_, validation_directory_,model_description,epochs):
         self.model_name += model_description
         create_folder_structure()
 
         params_val = {'dir': validation_directory_,
-                  'batch_size': 36,
-                  'shuffle': True,
-                  'sequence_length' : 12,'time_distributed' : True}
+                  'batch_size': self.batch_size,
+                  'shuffle': True,'debug_mode':False,
+                  'sequence_length' : self.sequence_length_ ,'time_distributed' : True,'images':False,
+                  'image_height':self.image_height,'image_width':self.image_width,
+                  'no_image_channels':self.no_image_channels,'camera_model_location':self.camera_model_location}
 
         validation_generator = DataGenerator(**params_val)
         validate_gen = validation_generator.generate()
 
         params_train = {'dir': train_directory_,
-                      'batch_size': 36,
-                      'shuffle': True,
-                        'sequence_length': 12,'time_distributed' : True}
+                  'batch_size': self.batch_size,
+                  'shuffle': True,'debug_mode':False,
+                  'sequence_length' : self.sequence_length_ ,'time_distributed' : True,'images':False,
+                  'image_height':self.image_height,'image_width':self.image_width,
+                  'no_image_channels':self.no_image_channels,'camera_model_location':self.camera_model_location}
 
         train_generator = DataGenerator(**params_train)
         train_gen = train_generator.generate()
@@ -100,10 +170,14 @@ class CNN_LSTM(object):
         ##########################
 
         calls_ = logs()
+        '''
         self.model.fit_generator(train_gen, validation_data=validate_gen,
                                  callbacks=[calls_.json_logging_callback,
                                             calls_.slack_callback,
                                             get_model_checkpoint(),get_Tensorboard()], steps_per_epoch =steps_per_epoch_,
+                                                                                    validation_steps=steps_per_epoch_, epochs=epochs)'''
+
+        self.model.fit_generator(train_gen, validation_data=validate_gen, steps_per_epoch =steps_per_epoch_,
                                                                                     validation_steps=steps_per_epoch_, epochs=epochs)
 
         current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -114,14 +188,10 @@ class CNN_LSTM(object):
         clean_up(self.model_name)
 
 
-
-
-
-
     def predict(self,input_data):
         K.set_learning_phase(0)
         sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-        self.model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+        self.model.compile(loss='mse', optimizer=sgd, metrics=['accuracy'])
         # CHANGED THIS!!!!
         input_data = input_data / 255
         predictions = self.model.predict(input_data, verbose=False)
@@ -130,78 +200,3 @@ class CNN_LSTM(object):
 
     def return_weights(self,layer):
         return self.model.layers[layer].get_weights()
-
-
-
-class cycle_model:
-    def __init__(self):
-        self.var = 0
-        # x,x_vel,x_acc,time
-        self.history = np.zeros((1,8))#BayesianRidge
-        self.models = {"x":linear_model.LinearRegression(),"y":linear_model.LinearRegression(),"z":linear_model.LinearRegression()}
-        self.poly = PolynomialFeatures(degree=2)
-
-    def add_points(self,pose,time):
-        time = float(time)/10**9
-        x,y,z = pose[1]
-        dx,dy,dz = pose[2][:3]
-        new_vals = np.zeros((1,8))
-        if self.history.shape[0] > 1:
-            since_start = time-self.history[1,6]
-        else:
-            since_start = 0
-
-        new_vals[:] = x,y,z,dx,dy,dz,time,since_start
-        self.history = np.concatenate([self.history,new_vals],axis=0)
-
-
-    def fit(self,gap):
-        features = np.zeros(((self.history.shape[0]-1)*3-3*gap,self.history.shape[1]-1))
-
-        '''print("History is " + str(self.history))
-        print("Gap is " + str(gap))'''
-        for i,z in zip(range(0,features.shape[0],3),range(0,self.history.shape[0]-1,1)):
-            for pert in range(3):
-                i_1,i_2 = int(z+gap+pert-1),z
-                f_index = i+pert
-                features[f_index,-1] = self.history[i_1,-1] - self.history[i_2,-1]
-                features[f_index,0] = self.history[i_1,0] - self.history[i_2,0]
-                features[f_index,1] = self.history[i_1,1] - self.history[i_2,1]
-                features[f_index,2] = self.history[i_1,2] - self.history[i_2,2]
-        '''
-        print("Features are : " + str(features[:,:]))
-        print("Xs are : " + str(features[:,[0,1,2]]))
-        print("Max features are : " + str(np.max(features[:-gap,3:])))
-        print("Min features are : " + str(np.min(features[:-gap,3:])))
-        print(" X values are : " + str(features[:,0]))'''
-        vars = self.poly.fit_transform(features[3:,3:].reshape((-1,4)))
-        self.models["x"].fit(vars,features[3:,0].reshape((-1,1)))
-        self.models["y"].fit(vars,features[3:,1].reshape((-1,1)))
-        self.models["z"].fit(vars,features[3:,2].reshape((-1,1)))
-
-
-    def predict(self,time):
-        #time_lapse = time - self.history[-1,6]
-        if self.history.shape[0] < 3:
-            return self.history[-1,[3,4,5]]*time#/10**9
-        gap = 0
-        for i,val in enumerate(self.history[1:,-1]):
-            #print("val is " + str(val) + "time is " + str(time))
-            if val >= time:
-                gap = i
-                break
-        if gap == 0 or self.history.shape[0]-gap < 4:
-            #print("Gap equals zero: returning " + str(self.history[-1,[3,4,5]]*time))
-            return self.history[-1,[3,4,5]]*time#/10**9
-
-
-        self.fit(gap)
-        vars = self.history[-1,3:-2].tolist()
-        vars.append(time)
-        #print("vars are : " + str(np.array(vars).reshape((-1,4))))
-        vars= self.poly.fit_transform(np.array(vars).reshape((-1,4)))
-        x = self.models['x'].predict(vars) + self.history[-1,0]
-        y = self.models['y'].predict(vars) + self.history[-1,1]
-        z = self.models['z'].predict(vars) + self.history[-1,2]
-        #print("Prediction for time " + str(time) + " is " + str([x,y,z]))
-        return x,y,z

@@ -20,6 +20,7 @@ class pose_visualiser:
         self.objects = np.zeros((2,0))
 
     def add_points(self,T_WS_r):
+        print("Adding point " + str(T_WS_r))
         if self.count < self.no_points:
             self.count += 1
         else:
@@ -44,7 +45,7 @@ class pose_visualiser:
         to_plot = self.image_coords(array[:,:count].transpose())
         cv2.polylines(self.image,np.int32([to_plot]),False,(255,0,255),1)
 
-    def plot(self,objects,cycle_model):
+    def plot(self,objects):#,cycle_model):
         self.image = np.zeros((self.height,self.width,3))
 
         objects = objects[:,objects[1,:]<self.points[-1,1]+50]
@@ -56,8 +57,6 @@ class pose_visualiser:
         self.ylims = [min(min(self.points[:,1]),self.ylims[0]),max(max(self.points[:,1]),self.ylims[1])]
 
         self.objects = np.concatenate([objects,self.objects], axis = 1)
-
-
 
         if objects.shape[1] > 0:
             if self.xlims[0] > min(self.objects[0,:]):
@@ -83,10 +82,11 @@ class pose_visualiser:
             self.scale = yscale
 
         to_plot = self.image_coords(self.points.copy())
+        #print("Have these points to plot " + str(to_plot))
         if self.count > 2:
             cv2.polylines(self.image,np.int32([to_plot]),False,(255,255,255),1)
         #cv2.imshow('m',self.image)
         #cv2.waitKey(2)
 
-        self.plot_bike_path(cycle_model)
+        #self.plot_bike_path(cycle_model)
         return self.image

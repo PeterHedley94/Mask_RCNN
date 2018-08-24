@@ -85,6 +85,13 @@ def get_image(filepath):
     #resized_image = np.expand_dims(cv2.resize(img, (IM_HEIGHT, IM_WIDTH)), axis=0)
     return img
 
+
+#GET AN IMAGE FROM FILE
+def get_resized_image(filepath,height,width):
+    img = cv2.imread(filepath)
+    resized_image = cv2.resize(img, (width,height)) #np.expand_dims(, axis=0)
+    return resized_image
+
 #STACK ALL IMAGES IN A FOLDER INTO AN TENSOR
 def dstack_folder_sequence(directory_, sequence_length):
     image_list = get_image_names(directory_)

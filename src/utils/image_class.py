@@ -49,7 +49,7 @@ class roi_class:
 
         #Central point matrix [c1,c2]
         self.c_mat = np.zeros((3,1))
-        self.c_mat[1,:],self.c_mat[0,:] = self.camera_model["principal_point"]
+        self.c_mat[0,:],self.c_mat[1,:] = self.camera_model["principal_point"]
         #TRANSFORMATION TO WORLD FRAME
         self.T_WS = np.zeros((4,4),dtype = np.float64)
         self.T_WS[:3,:4] = np.concatenate((self.pose[0],self.pose[1][:,None]),axis = 1)
@@ -258,12 +258,13 @@ class roi_class:
         '''
         self.kalman.append(Kalman_Filter(10,5))
         self.kalman[i].F = np.eye(10,dtype = np.float64)
-        deltat = 1.0
+        #TODO
+        deltat = 1.0/30
         self.kalman[i].F[:5,5:] = np.diag(np.array([deltat]*5,dtype = np.float64))
         self.kalman[i].H = np.zeros((5,10),dtype = np.float64)
         self.kalman[i].H[:5,:5] = np.eye(5)
-        self.kalman[i].Q =  np.diag(np.array([1,1,1,10,10,0.25,0.25,0.25,10,10],dtype = np.float64)) # 1e-5 *
-        self.kalman[i].R = np.diag(np.array([0.1,0.1,30,20,20],dtype = np.float64)) # 1e-1 *
+        self.kalman[i].Q =  np.diag(np.array([0.1,0.1,0.1,7,7,0.01,0.01,0.01,0.7,0.7],dtype = np.float64)*100) # 1e-5 *
+        self.kalman[i].R = np.diag(np.array([0.2,0.2,0.5,20,20],dtype = np.float64)*100) # 1e-1 *
         self.kalman[i].errorCovPost = np.eye(10,dtype = np.float64)# 1.
         #print("Kalman number " +str(i) + " initialised with " + str(self.roi_dims_w[[0,1,2,4,5],i]))
         state = np.concatenate([self.roi_dims_w[[0,1,2,4,5],i],np.array([0,0,0,0,0])],axis=0)

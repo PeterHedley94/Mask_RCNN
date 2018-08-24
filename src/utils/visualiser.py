@@ -105,7 +105,9 @@ def draw_rects(img,m_,class_names):
             #print("The kalman predicted state is" + str(m_.kalman[i].statePre))
             k_c_x,k_c_y = m_.world_to_camera(m_.kalman[i].statePre[:3])[:2]#.append(kalman.statePre[[4,5]])
             k_w,k_h = m_.kalman[i].statePre[[3,4]]
-            print("Kalman predicted state is  " + str(m_.kalman[i].statePre[:3]))
+            print("Kalman predicted state is  \n" + str(m_.kalman[i].statePre))
+            print("Kalman Q state is  \n" + str(m_.kalman[i].Q))
+            print("Kalman R state is  \n" + str(m_.kalman[i].R))
             print("Kalman predicted in camera frame is " + str(m_.world_to_camera(m_.kalman[i].statePre[:3])))
             pt1,pt2 = x_y_from_cx_cy([k_c_x,k_c_y,k_w,k_h])
             if check_in_frame(pt1) and check_in_frame(pt2):
