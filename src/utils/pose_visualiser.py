@@ -45,7 +45,7 @@ class pose_visualiser:
         to_plot = self.image_coords(array[:,:count].transpose())
         cv2.polylines(self.image,np.int32([to_plot]),False,(255,0,255),1)
 
-    def plot(self,objects):#,cycle_model):
+    def plot(self,objects,cycle_model):
         self.image = np.zeros((self.height,self.width,3))
 
         objects = objects[:,objects[1,:]<self.points[-1,1]+50]

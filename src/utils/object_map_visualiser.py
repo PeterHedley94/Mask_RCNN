@@ -25,11 +25,14 @@ class obj_map_visualiser:
     def plot_object_path(self,img,m_,index):
         array = np.zeros((2,5))
         for i in range(0,5,1):
-            x,y,z = m_.object_models[index].predict(float(i+1))
+            Prediction,Cov = m_.kalman[index].predict_seconds(float(i+1))
+            x,y,z = Prediction[:3]
             array[:,i] = x,y
-        to_plot = self.array_image_coords(array.transpose())
-        #print("The points to plot are : " + str(to_plot))
-        cv2.polylines(img,np.int32([to_plot]),False,(255,0,255),1)
+            print("Covariance of prediction is \n" + str(np.array(Cov,dtype = np.int16)))
+            print("After conversion" + str(np.multiply(Cov[:3,:3],np.eye(3))))
+            radius = np.max(np.multiply(Cov[:3,:3],np.eye(3)))/2
+
+            cv2.circle(img,self.image_coords(x,y),int(radius*self.scale),(255,0,255),3)
         return img
 
     def x_y_from_cx_cy(array):
@@ -54,9 +57,6 @@ class obj_map_visualiser:
         xscale = self.width/(self.xlims[1] - self.xlims[0])
         yscale = self.height/(self.ylims[1] - self.ylims[0])
 
-        for x,y in zip(self.xpoints,self.ypoints):
-            cv2.circle(img,self.image_coords(x,y),0,(100,0,0),3)
-            
         if xscale < yscale:
             self.scale = xscale
         else:

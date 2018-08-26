@@ -13,7 +13,7 @@ class Kalman_Filter:
         '''
         self.dynamic = dynamic
         self.measurable = measurable
-
+        self.deltat = 1
         self.F = np.zeros((dynamic,dynamic))
         self.H = np.zeros((measurable,dynamic))
         self.Q =  np.zeros((dynamic,dynamic))
@@ -21,15 +21,25 @@ class Kalman_Filter:
         self.S = None
         self.errorCovPost = np.zeros((dynamic,dynamic))# 1.
         self.statePost = np.zeros((dynamic,1))
-        self.log_m_likelihood = 0
+        self.log_m_likelihood = 0.0
         #little hack if StatePre not initialised
         self.statePre = self.statePost
 
     def predict(self):
         self.statePost = np.reshape(self.statePost,(self.dynamic,1))
-        self.statePre = self.F @ self.statePost
-        self.errorCovPre = self.F @ self.errorCovPost @ self.F.transpose() + self.Q
+        self.statePre = np.matmul(self.F,self.statePost)
+        self.errorCovPre = np.matmul(np.matmul(self.F,self.errorCovPost),self.F.transpose()) + self.Q
         return self.statePre
+
+    def predict_seconds(self,seconds):
+        F = self.F.copy()
+        F[:5,5:] = np.diag(np.array([seconds]*5,dtype = np.float64))
+        cov = self.errorCovPost.copy()
+        print("Covariance error is \n " + str(self.errorCovPost) )
+        Prediction = np.matmul(F,self.statePost)
+        for i in range(int(seconds/self.deltat)):
+            cov = np.add(np.matmul(np.matmul(self.F,cov),self.F.transpose()),self.Q)
+        return Prediction,cov
 
     def correct(self,state):
         state = np.reshape(np.array(state), (self.measurable,1))

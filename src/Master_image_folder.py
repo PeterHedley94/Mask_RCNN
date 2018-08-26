@@ -119,7 +119,7 @@ def get_nearest_pose(time,filenames):
 
 def main(args):
     '''Initializes and cleanup ros node'''
-    path = '/home/peter/Documents/okvis_drl/build/tate3_dataset'#tate3_dataset'
+    path = '/home/peter/Documents/okvis_drl/build/tate3_dataset'#tate3_dataset'#blackfriars1_dataset'#
     #path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/at.avi'
 
     images = get_image_names(path+"/cam0/data")

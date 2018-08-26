@@ -23,14 +23,16 @@ def gd(filename):
 
 def main(args):
     '''Initializes and cleanup ros node'''
-    path = "/home/peter/Documents/okvis_drl/build/buck_imp1_dataset"#"/home/peter/Tests"
+    path = "/home/peter/Documents/okvis_drl/build/imp4"#"/home/peter/Tests"
     #path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/at.avi'
-
+    up_to = 1850#-600
     #images = get_image_names(path+"/cam0/data")
     #depth_images = get_xml_names(path+"/cam1/data")
     o_T_WS_C = get_file_names(os.path.join(path,"pose"),"T_WS_C.txt",to_number)
     o_T_WS_r = get_file_names(os.path.join(path,"pose"),"T_WS_r.txt",to_number)
     o_sb = get_file_names(os.path.join(path,"pose"),"sb.txt",to_number)
+    images = get_image_names(path+"/cam0/data")
+    depth_images = get_xml_names(path+"/cam1/data")
 
     #cap = cv2.VideoCapture(path)
     #frame_width = get_image(images[0]).shape[1]

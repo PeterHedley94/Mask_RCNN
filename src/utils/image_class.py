@@ -8,7 +8,6 @@ import numpy as np
 import cv2
 from Tracking.Kalman import *
 from sensor_msgs.msg import Image
-from MovementModels.object_model import *
 from utils.common import *
 
 class image_class:
@@ -42,10 +41,11 @@ class roi_class:
         self.image = image
         self.masks = mask
         self.class_ = class_
+        self.time = time_
 
         self.pose = pose
         self.camera_model = camera_model
-
+        self.remove_indices = []
 
         #Central point matrix [c1,c2]
         self.c_mat = np.zeros((3,1))
@@ -78,33 +78,24 @@ class roi_class:
         self.depth_rois = np.zeros(self.no_rois)
         self.get_depth_rois(roi_)
 
-
-        self.time = time_
-
         #Col1-5 = centre_x,y,z,1s,width,height - camera frame
         self.roi_dims_c = np.ones((6,self.no_rois))
         #'' '' - world frame
         self.roi_dims_w = np.ones((6,self.no_rois))
         self.get_dimensions(roi_)
-
-        self.hist = [None] * self.no_rois
-        self.id = np.arange(self.no_rois)
         self.colours = colours
-        self.lives = [3] * self.no_rois
         self.descriptors = des
         self.keypoints = key
-
+        self.delete_indices()
+        self.lives = [3] * self.no_rois
+        self.id = np.arange(self.no_rois)
         self.tracker_predictions = [0,0,0,0] * self.no_rois
         self.kalman = []
         self.tracker = []
-        self.object_models = []
-
 
         for i in range(self.no_rois):
             self.set_up_kalman(i)
             self.tracker.append(None)
-            self.object_models.append(object_model())
-            self.object_models[i].add_points(self.roi_dims_w[[0,1,3],i],self.time)
 
 
     def intialise_tracker(self,i):
@@ -131,6 +122,20 @@ class roi_class:
         else:
             return array[2,0]
 
+    def delete_indices(self):#,roi_):
+        indices = [False if x in self.remove_indices else True for x in np.arange(self.no_rois)]
+        self.roi_dims_c = self.roi_dims_c[:,np.where(indices)].reshape((6,-1))
+        self.roi_dims_w = self.roi_dims_w[:,np.where(indices)].reshape((6,-1))
+        self.masks = self.masks[:,:,np.where(indices)].reshape(self.camera_model["image_dimension"][1],self.camera_model["image_dimension"][0],-1)
+        self.class_ = self.class_[np.where(indices)]
+        for i,k in enumerate(self.remove_indices):
+            del self.colours[k-i]
+            del self.descriptors[k-i]
+            del self.keypoints[k-i]
+        self.no_rois -= len(self.remove_indices)
+        self.remove_indices = []
+        #return roi_
+
     def check_depth(self,depth,bbox,i):
         #"roi[1],roi[3] - x top left, x top right"
         #"roi[0],roi[2]" - y top left, y top right
@@ -141,6 +146,8 @@ class roi_class:
         real_height = abs(world_array[2,0]-world_array[2,1])
         check_size = expected_heights[class_names[self.class_[i]]]
         depth = self.correct_depth(real_height,check_size,array)
+        if depth > 20:
+            self.remove_indices.append(i)
         return depth
 
     def get_depth_rois(self,bbox):
@@ -148,7 +155,7 @@ class roi_class:
             #print(self.masks[:,:,roi])
             depth_mask = self.depth[self.masks[:,:,roi]]
             self.depth[self.masks[:,:,roi]] = 10000000
-            predicted_depth = np.mean(depth_mask[depth_mask>0])/5000
+            predicted_depth = np.median(depth_mask[depth_mask>0])/5000
             self.depth_rois[roi] = self.check_depth(predicted_depth,bbox[roi,:],roi)
             #print("predicted Depth is " + str(self.depth_rois[roi]))
             if math.isnan(self.depth_rois[roi]):
@@ -196,9 +203,6 @@ class roi_class:
                 new_state = np.array(self.roi_dims_w[[0,1,2,4,5],c])
                 kll = older.kalman[index].get_log_likelihood(new_state[:,None])
 
-                self.object_models[c] = older.object_models[index]
-                self.object_models[c].add_points(self.roi_dims_w[[0,1,3],c],self.time)
-
                 if kll < 10**6:
                     self.kalman[c] = older.kalman[index]
                     #print("updating kalman with new state" + str(new_state))
@@ -229,12 +233,8 @@ class roi_class:
                 self.tracker.append(older.tracker[old_])
                 self.tracker_predictions.append([0,0,0,0])
 
-                vars = older.object_models[old_].predict(self.time-older.time)
-                older.object_models[old_].add_points(vars,self.time)
-                self.object_models.append(older.object_models[old_])
-
                 self.lives.append(older.lives[old_]-1)
-                self.hist.append(older.hist[old_])
+                #self.hist.append(older.hist[old_])
                 self.colours.append(older.colours[old_])
                 self.descriptors.append(older.descriptors[old_])
                 self.keypoints.append(older.keypoints[old_])
@@ -263,13 +263,14 @@ class roi_class:
         self.kalman[i].F[:5,5:] = np.diag(np.array([deltat]*5,dtype = np.float64))
         self.kalman[i].H = np.zeros((5,10),dtype = np.float64)
         self.kalman[i].H[:5,:5] = np.eye(5)
-        self.kalman[i].Q =  np.diag(np.array([0.1,0.1,0.1,7,7,0.01,0.01,0.01,0.7,0.7],dtype = np.float64)*100) # 1e-5 *
-        self.kalman[i].R = np.diag(np.array([0.2,0.2,0.5,20,20],dtype = np.float64)*100) # 1e-1 *
+        self.kalman[i].Q =  np.diag(np.array([0.1,0.1,0.1,7,7,0.01,0.01,0.01,0.01,0.7],dtype = np.float64)*100) # 1e-5 *
+        self.kalman[i].R = np.diag(np.array([1.0,1.0,1.0,20,20],dtype = np.float64)*100) # 1e-1 *
         self.kalman[i].errorCovPost = np.eye(10,dtype = np.float64)# 1.
         #print("Kalman number " +str(i) + " initialised with " + str(self.roi_dims_w[[0,1,2,4,5],i]))
         state = np.concatenate([self.roi_dims_w[[0,1,2,4,5],i],np.array([0,0,0,0,0])],axis=0)
         self.kalman[i].statePost = state[:,None]
         self.kalman[i].statePre = state[:,None]
+        self.kalman[i].deltat = 1.0/30
 
     def correct_Kalman_time(self,deltat):
         for i in range(self.no_rois):

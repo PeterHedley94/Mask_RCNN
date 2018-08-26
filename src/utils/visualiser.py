@@ -105,10 +105,6 @@ def draw_rects(img,m_,class_names):
             #print("The kalman predicted state is" + str(m_.kalman[i].statePre))
             k_c_x,k_c_y = m_.world_to_camera(m_.kalman[i].statePre[:3])[:2]#.append(kalman.statePre[[4,5]])
             k_w,k_h = m_.kalman[i].statePre[[3,4]]
-            print("Kalman predicted state is  \n" + str(m_.kalman[i].statePre))
-            print("Kalman Q state is  \n" + str(m_.kalman[i].Q))
-            print("Kalman R state is  \n" + str(m_.kalman[i].R))
-            print("Kalman predicted in camera frame is " + str(m_.world_to_camera(m_.kalman[i].statePre[:3])))
             pt1,pt2 = x_y_from_cx_cy([k_c_x,k_c_y,k_w,k_h])
             if check_in_frame(pt1) and check_in_frame(pt2):
                 pos_ = np.array(pt1)
@@ -143,8 +139,14 @@ def draw_masks(img,mrcnn_out):
 
 def get_depth_plot(array):
     h,w = array.shape
-    array2 = np.zeros((h,w))
-    cv2.normalize(array,array2,0,255,cv2.NORM_MINMAX)
+    array2 = np.zeros((h,w)) + 50000
+    #array = array/50
+    #array[array>15] = 15
+    array = np.divide(np.log(array),np.log(array2))
+    array *= 255/array.max()
+    #array = cv2.medianBlur(np.array(array,dtype=np.float32),5)
+    #array = cv2.GaussianBlur(array,(15,15),0)
+    #array = cv2.convertScaleAbs(array, alpha=255/array.max(), beta=0.)
     nice_array = np.zeros((h,w,3))
     for channel in range(3):
         nice_array[:,:,channel] = array

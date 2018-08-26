@@ -24,6 +24,13 @@ def get_folders(directory_):
         print("Could not find any folders/categories!")
     return sorted(folders)
 
+def delete_files(files):
+    for file in files:
+        ## If file exists, delete it ##
+        if os.path.isfile(file):
+            os.remove(file)
+        else:    ## Show an error ##
+            print("Error: %s file not found" % file)
 
 #RETURNS ALL IMAGES NAMES IN A DIRECTORY
 def get_file_names(directory_,string,key = None):
@@ -61,7 +68,7 @@ def get_array_xml(file):
     tree = ET.parse(file)
     rows = tree.find("depth_image").find("rows").text
     cols = tree.find("depth_image").find("cols").text
-    array = np.fromstring(tree.find("depth_image").find("data").text,sep = " ")
+    array = np.fromstring(tree.find("depth_image").find("data").text,sep = " ",dtype=np.uint16)
     return np.reshape(array,(int(rows),int(cols)))
 
 #RETURNS ALL IMAGES NAMES IN A DIRECTORY
