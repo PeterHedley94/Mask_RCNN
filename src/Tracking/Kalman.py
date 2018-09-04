@@ -13,7 +13,7 @@ class Kalman_Filter:
         '''
         self.dynamic = dynamic
         self.measurable = measurable
-        self.deltat = 1
+        self.deltat = 1.0/30
         self.F = np.zeros((dynamic,dynamic))
         self.H = np.zeros((measurable,dynamic))
         self.Q =  np.zeros((dynamic,dynamic))
@@ -33,13 +33,11 @@ class Kalman_Filter:
 
     def predict_seconds(self,seconds):
         F = self.F.copy()
-        F[:5,5:] = np.diag(np.array([seconds]*5,dtype = np.float64))
+        F[:self.measurable,self.measurable:] = np.diag(np.array([seconds]*self.measurable,dtype = np.float64))
         cov = self.errorCovPost.copy()
-        print("Covariance error is \n " + str(self.errorCovPost) )
         Prediction = np.matmul(F,self.statePost)
-        for i in range(int(seconds/self.deltat)):
-            cov = np.add(np.matmul(np.matmul(self.F,cov),self.F.transpose()),self.Q)
-        return Prediction,cov
+        cov = np.add(np.matmul(np.matmul(F,cov),F.transpose()),seconds*self.Q/self.deltat)
+        return Prediction,math.sqrt(cov[0,0])
 
     def correct(self,state):
         state = np.reshape(np.array(state), (self.measurable,1))

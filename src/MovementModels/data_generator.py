@@ -204,6 +204,7 @@ class DataGenerator(object):
             #print(y_camera_point)
             Y[seq_no,:,None] = y_T_W_r.reshape((-1,1))
         if self.use_images:
+            X_images = (X_images - 127.5) / 127.5
             if self.debug_mode_:
                 return X_initial_points,X_images,X,Y
             else:
@@ -212,14 +213,3 @@ class DataGenerator(object):
             if self.debug_mode_:
                 return X_initial_points,X,Y
             return X,Y
-
-
-
-
-
-
-
-
-        # Apply scaling. Move to preprocessing!
-        X = (X - 127.5) / 127.5
-        return X, Y

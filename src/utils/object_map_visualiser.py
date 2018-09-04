@@ -28,11 +28,13 @@ class obj_map_visualiser:
             Prediction,Cov = m_.kalman[index].predict_seconds(float(i+1))
             x,y,z = Prediction[:3]
             array[:,i] = x,y
-            print("Covariance of prediction is \n" + str(np.array(Cov,dtype = np.int16)))
-            print("After conversion" + str(np.multiply(Cov[:3,:3],np.eye(3))))
-            radius = np.max(np.multiply(Cov[:3,:3],np.eye(3)))/2
-
-            cv2.circle(img,self.image_coords(x,y),int(radius*self.scale),(255,0,255),3)
+            #print("Covariance of prediction is \n" + str(np.array(Cov,dtype = np.int16)))
+            #print("After conversion" + str(np.multiply(Cov[:3,:3],np.eye(3))))
+            radius = Cov #np.max(np.multiply(Cov[:3,:3],np.eye(3)))/2
+            if m_.object_collision[index] == False:
+                cv2.circle(img,self.image_coords(x,y),int(radius*self.scale),(255,0,0),1)
+            else:
+                cv2.circle(img,self.image_coords(x,y),int(radius*self.scale),(0,0,255),1)
         return img
 
     def x_y_from_cx_cy(array):

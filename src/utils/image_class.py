@@ -55,7 +55,6 @@ class roi_class:
         self.T_WS[:3,:4] = np.concatenate((self.pose[0],self.pose[1][:,None]),axis = 1)
         self.T_WS[3,3] = 1
         self.T_WC = np.matmul(self.T_WS,np.array(self.camera_model["T_SC"]).reshape((4,4)))
-        print(self.T_WC)
         #Focal Matrix [[1/f1,0],[0,1/f2]]
         self.foc_mat = np.zeros((2,2))
         self.foc_mat[0,0],self.foc_mat[1,1] = 1/self.camera_model["focal_length"][0],1/self.camera_model["focal_length"][1]
@@ -69,7 +68,6 @@ class roi_class:
         self.T_CW[:3,:4] = np.concatenate((self.T_WC[:3,:3].transpose(),
                                                 np.matmul(-self.T_WC[:3,:3].transpose(),self.T_WC[:3,3:])),axis = 1)
         self.T_CW[3,3] = 1
-        print(np.array(self.camera_model["T_SC"]).reshape((4,4)))
         #Focal Matrix Inv [[1/f1,0],[0,1/f2]]
         self.foc_mat_inv = np.zeros((2,2))
         self.foc_mat_inv[0,0],self.foc_mat_inv[1,1] = self.camera_model["focal_length"][0],self.camera_model["focal_length"][1]
@@ -89,6 +87,7 @@ class roi_class:
         self.delete_indices()
         self.lives = [3] * self.no_rois
         self.id = np.arange(self.no_rois)
+        self.object_collision = [False] * self.no_rois
         self.tracker_predictions = [0,0,0,0] * self.no_rois
         self.kalman = []
         self.tracker = []
@@ -198,17 +197,13 @@ class roi_class:
             if index < len(older.id) and index >= 0:
                 self.id[c] = older.id[index]
                 self.colours[c] = older.colours[index]
-
                 #UPDATE KALMAN
                 new_state = np.array(self.roi_dims_w[[0,1,2,4,5],c])
                 kll = older.kalman[index].get_log_likelihood(new_state[:,None])
 
                 if kll < 10**6:
                     self.kalman[c] = older.kalman[index]
-                    #print("updating kalman with new state" + str(new_state))
                     var = self.world_to_camera(new_state[:3].reshape((-1,1)))
-                    #print("Transformed kalman new state " + str(var))
-                    #print("Should be " + str(self.roi_dims_c[:3,:]))
                     self.kalman[c].correct(new_state)
                 else:
                     print("Matched with large kll of : " + str(kll))
@@ -225,6 +220,7 @@ class roi_class:
                 no_added += 1
                 self.id = np.concatenate((self.id,older.id[old_,None]), axis=0)
                 self.class_ = np.concatenate((self.class_,older.class_[old_,None]),axis = 0)
+                self.object_collision.append(False)
                 self.kalman.append(older.kalman[old_])
 
                 predictions = older.kalman[old_].statePre
@@ -263,14 +259,23 @@ class roi_class:
         self.kalman[i].F[:5,5:] = np.diag(np.array([deltat]*5,dtype = np.float64))
         self.kalman[i].H = np.zeros((5,10),dtype = np.float64)
         self.kalman[i].H[:5,:5] = np.eye(5)
-        self.kalman[i].Q =  np.diag(np.array([0.1,0.1,0.1,7,7,0.01,0.01,0.01,0.01,0.7],dtype = np.float64)*100) # 1e-5 *
-        self.kalman[i].R = np.diag(np.array([1.0,1.0,1.0,20,20],dtype = np.float64)*100) # 1e-1 *
         self.kalman[i].errorCovPost = np.eye(10,dtype = np.float64)# 1.
         #print("Kalman number " +str(i) + " initialised with " + str(self.roi_dims_w[[0,1,2,4,5],i]))
         state = np.concatenate([self.roi_dims_w[[0,1,2,4,5],i],np.array([0,0,0,0,0])],axis=0)
         self.kalman[i].statePost = state[:,None]
         self.kalman[i].statePre = state[:,None]
         self.kalman[i].deltat = 1.0/30
+
+        if class_names[self.class_[i]] == "person":
+            q = [1.5,1.5,1.5,7,7,0.15,0.15,0.15,0.7,0.7]
+        elif class_names[self.class_[i]] == "bicycle":
+            q = [10,10,10,7,7,1,1,1,0.7,0.7]
+        else:
+            q = [15,15,15,7,7,1.5,1.5,1.5,0.7,0.7]
+
+        r = [0.1,0.1,0.1,20,20]
+        self.kalman[i].Q =  np.diag(np.array(q,dtype = np.float64))/100 # 1e-5 *
+        self.kalman[i].R = np.diag(np.array(r,dtype = np.float64)) # 1e-1 *
 
     def correct_Kalman_time(self,deltat):
         for i in range(self.no_rois):
@@ -314,6 +319,6 @@ class roi_class:
 
 
         #print("camera_point \n" + str(self.roi_dims_c[:3,:]))
-        print("world_point \n" + str(self.roi_dims_w[:3,:]))
+        #print("world_point \n" + str(self.roi_dims_w[:3,:]))
         #print("T_WS is \n" + str(self.T_WS))
         #print("world_point 2 cam \n" + str(self.world_to_camera(self.roi_dims_w[:3,:])))

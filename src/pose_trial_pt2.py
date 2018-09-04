@@ -23,7 +23,7 @@ def gd(filename):
 
 def main(args):
     '''Initializes and cleanup ros node'''
-    path = "/home/peter/Documents/okvis_drl/build/imp4"#"/home/peter/Tests"
+    path = "/home/peter/Documents/okvis_drl/build/road1_dataset"#"/home/peter/Tests"
     #path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/at.avi'
     up_to = 1850#-600
     #images = get_image_names(path+"/cam0/data")

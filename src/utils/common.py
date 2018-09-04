@@ -2,7 +2,7 @@ import os,sys
 sys.path.insert(1,'/usr/local/lib/python3.5/dist-packages')
 
 
-
+USE_KALMAN_MODEL = True
 BRISK_THRESHOLD = 40
 BRISK_MIN_VALUE = 10**-3
 
@@ -15,6 +15,11 @@ INDEX_SELECTOR_THRESHOLD = 10**-20#5000#(KALMAN_LIKELIHOOD_THRESHOLD-KALMAN_SURE
 
 expected_heights = {'person':[1.1,1.5,2.15],'bicycle':[0.6,1.0,1.2],"car":[1.2,1.6,2.5],'motorcycle':[0.6,1.0,1.2],
                     'bus':[2.5,3.0,3.5],'truck':[2.5,3.0,3.5],'bottle':[0.10,0.2,0.35]}
+
+
+
+
+
 class_names = ['BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
                'bus', 'train', 'truck', 'boat', 'traffic light',
                'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird',

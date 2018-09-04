@@ -34,7 +34,7 @@ class model:
         # COCO Class names
         # Index of the class in the list is its ID. For example, to get ID of
         # the teddy bear class, use: class_names.index('teddy bear')
-        self.class_indices = [40]#[1,2,3,4,6,8]
+        self.class_indices = [1,2,3,4,6,8] #[40]#
         self.class_names = ['BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
                        'bus', 'train', 'truck', 'boat', 'traffic light',
                        'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird',
@@ -93,7 +93,7 @@ class model:
 
     def mask_predict(self,image):
         filename = str(image.time) + ".p"
-        directory = "tate3_masks"
+        directory = "road2_masks"
         if not os.path.exists(os.path.join(ROOT_DIR,directory,filename)):
             with graph.as_default():
                 #results contains ['rois', 'scores', 'class_ids', 'masks']

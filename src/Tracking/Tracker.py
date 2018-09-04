@@ -55,9 +55,9 @@ def match_ROIs(older, newer, BRISK_):
     #Methods of matching ROIs
     #funcdict = [BRISK_.get_match_score,Kalman_predict]
     #funcdict = [Kalman_predict]
-    funcdict = [tracker_predict]
+    funcdict = [tracker_predict,BRISK_.get_match_score,Kalman_predict]
     #funcprob = [BRISK_.get_probabilities,Kalman_predict_probability]
-    funcprob = [tracker_predict_probability]
+    funcprob = [tracker_predict_probability,BRISK_.get_probabilities,Kalman_predict_probability]
     #'bb_intersection_over_union': bb_intersection_over_union_probabilities,
 
     matches = np.zeros((len(funcdict),newer.no_rois,older.no_rois))
@@ -82,9 +82,9 @@ def match_ROIs(older, newer, BRISK_):
                 else:
                     matches[c,new_,old_] = 0
     start = time.time()
-    '''
-    print(matches)
-    print(".............")'''
+
+    #print(matches)
+    #print("............. matches 1")
     #Combine methods
     for c,method_ in enumerate(funcprob):
         matches[c,:,:] = method_(matches[c,:,:])
@@ -92,7 +92,7 @@ def match_ROIs(older, newer, BRISK_):
             #matches[0,:,:] = matches[0,:,:] + matches[c,:,:]
             matches[0,:,:] = np.multiply(matches[0,:,:],matches[c,:,:])
     #print(matches)
-    #print(".............")
+    #print("............. matches 2")
     #print("MAx index theshold is " + str(INDEX_SELECTOR_THRESHOLD))
     #Check there are detected objects in new frame
     #print(matches)

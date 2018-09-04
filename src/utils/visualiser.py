@@ -171,7 +171,6 @@ class visualiser:
         draw_rects(mask_image,mrcnn_output,class_names)
         #cv2.imwrite(str(IMAGE_COUNT) + ".jpg",mask_image)
         cv2.imwrite("progress.jpg",mask_image)
-        IMAGE_COUNT += 1
         mask_image = imutils.resize(mask_image,width=w,height=h)
 
         #POSE
@@ -183,7 +182,7 @@ class visualiser:
 
         #DEPTH IMAGE
         depth_image = get_depth_plot(mrcnn_output.depth.copy())
-        cv2.imwrite(os.path.join("depth",str(IMAGE_COUNT)+".jpg"),depth_image)
+        #cv2.imwrite(os.path.join("depth",str(IMAGE_COUNT)+".jpg"),depth_image)
         depth_image = display_instances(depth_image, mrcnn_output.masks,colors=mrcnn_output.colours)
         draw_depth_text(depth_image,mrcnn_output)
 
@@ -197,9 +196,12 @@ class visualiser:
 
 
     def write_to_video(self,output_video,mcrnn_output,class_names,T_WS_r,T_WS_C,camera_model,cycle_model):
+        global IMAGE_COUNT
         img = self.construct_frame(mcrnn_output,class_names,T_WS_r,T_WS_C,camera_model,cycle_model)
         cv2.imshow("i",img)
         cv2.waitKey(1)
         print(img.shape)
+        cv2.imwrite("output_images/" + str(IMAGE_COUNT) + ".jpg",img)
+        IMAGE_COUNT += 1
         cv2.imwrite("image.jpg",img)
         output_video.write(img)

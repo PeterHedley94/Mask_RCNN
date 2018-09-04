@@ -20,7 +20,6 @@ class pose_visualiser:
         self.objects = np.zeros((2,0))
 
     def add_points(self,T_WS_r):
-        print("Adding point " + str(T_WS_r))
         if self.count < self.no_points:
             self.count += 1
         else:
@@ -33,17 +32,26 @@ class pose_visualiser:
         points[:self.count,1] = (self.height/2) - (points[:self.count,1]*self.scale)/2
         return points[:self.count,:]
 
+    def no_count_image_coords(self,points):
+        points[:,0] = (self.width/2) + (points[:,0]*self.scale)/2
+        points[:,1] = (self.height/2) - (points[:,1]*self.scale)/2
+        return points
+
 
     def plot_bike_path(self,cycle_model):
-        array = np.zeros((2,10))
-        count = 1
-        for i in range(0,10,1):
-            x,y,z = cycle_model.predict(float(i+1))
-            array[:,i] = x,y
-            count += 1
 
-        to_plot = self.image_coords(array[:,:count].transpose())
-        cv2.polylines(self.image,np.int32([to_plot]),False,(255,0,255),1)
+        count = 1
+
+        x,y,z,time_,uncert,val = cycle_model.predict()
+        array = np.zeros((2,len(uncert)))
+        if val == True:
+            array[0,:],array[1,:] = x,y
+            to_plot = self.no_count_image_coords(array.transpose())
+            for point in range(to_plot.shape[0]):
+                radius = uncert[point]
+                point = (int(to_plot[point,0]),int(to_plot[point,1]))
+                cv2.circle(self.image,point,int(radius*self.scale),(255,0,255),1)
+            #cv2.polylines(self.image,np.int32([to_plot]),False,(255,0,255),1)
 
     def plot(self,objects,cycle_model):
         self.image = np.zeros((self.height,self.width,3))
@@ -53,27 +61,26 @@ class pose_visualiser:
         objects = objects[:,objects[1,:]>self.points[-1,1]-50]
         objects = objects[:,objects[0,:]>self.points[-1,0]-50]
 
-        self.xlims = [min(min(self.points[:,0]),self.xlims[0]),max(max(self.points[:,0]),self.xlims[1])]
-        self.ylims = [min(min(self.points[:,1]),self.ylims[0]),max(max(self.points[:,1]),self.ylims[1])]
+        self.xlims = [min(min(self.points[:,0]*0.5),self.xlims[0]),max(max(self.points[:,0]*1.5),self.xlims[1])]
+        self.ylims = [min(min(self.points[:,1]*0.5),self.ylims[0]),max(max(self.points[:,1]*1.5),self.ylims[1])]
 
         self.objects = np.concatenate([objects,self.objects], axis = 1)
 
         if objects.shape[1] > 0:
             if self.xlims[0] > min(self.objects[0,:]):
-                self.xlims[0] = min(self.objects[0,:])
+                self.xlims[0] = min(self.objects[0,:])*0.5
             elif self.xlims[1] < max(self.objects[0,:]):
-                self.xlims[1] = max(self.objects[0,:])
+                self.xlims[1] = max(self.objects[0,:])*1.5
 
             if self.ylims[0] > min(self.objects[1,:]):
-                self.ylims[0] = min(self.objects[1,:])
+                self.ylims[0] = min(self.objects[1,:])*0.5
             elif self.ylims[1] < max(self.objects[1,:]):
-                self.ylims[1] = max(self.objects[1,:])
+                self.ylims[1] = max(self.objects[1,:])*1.5
 
         self.xlims[0] = min(self.xlims[0],-10**-3)
         self.xlims[1] = max(self.xlims[1],10**-3)
         self.ylims[0] = min(self.ylims[0],-10**-3)
         self.ylims[1] = max(self.ylims[1],10**-3)
-        #print("Limits are " + str(self.xlims) + " : " + str(self.ylims))
         xscale = self.width/(self.xlims[1] - self.xlims[0])
         yscale = self.height/(self.ylims[1] - self.ylims[0])
         if xscale < yscale:
@@ -88,5 +95,5 @@ class pose_visualiser:
         #cv2.imshow('m',self.image)
         #cv2.waitKey(2)
 
-        #self.plot_bike_path(cycle_model)
+        self.plot_bike_path(cycle_model)
         return self.image
