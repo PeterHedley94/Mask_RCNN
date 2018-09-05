@@ -4,9 +4,6 @@ sys.path.insert(1,'/usr/local/lib/python3.5/dist-packages')
 import time,json,threading,random, math, numpy as np, skimage.io, matplotlib, matplotlib.pyplot as plt, cv2
 #RUNNING WITHOUT ROS
 ROOT_DIR = os.path.abspath("./mask_rcnn")
-#IMAGE_COUNT = 0
-#RUNNING WITH ROS
-#ROOT_DIR = os.path.join(os.path.abspath("./"),"src","mask_rcnn","src","mask_rcnn")
 VERBOSE=False
 #image_buffer
 from utils.image_class import *
@@ -23,9 +20,6 @@ from Tracking.Tracker import *
 from Tracking.BRISK import *
 from MovementModels.cyclist_model import *
 from MovementModels.collision_detection import *
-
-
-IMAGE_TIME = 0
 
 class cycle_safe:
     def __init__(self,im_width,im_height,camera_model):
@@ -65,21 +59,8 @@ class cycle_safe:
         return indices
 
 
-    def undistort_image(self,image):
-        mtx = np.zeros((3,3))
-        mtx[0,0],mtx[1,1] = 1/self.camera_model["focal_length"][0],1/self.camera_model["focal_length"][1]
-        mtx[0,1],mtx[0,2] = self.camera_model["principal_point"]
-        mtx[2,2] = 1
-        dist = np.array(self.camera_model["distortion_coefficients"])
-        w,h = image.shape[:2]
-        #newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
-        new_image = cv2.undistort(image, mtx, dist, None,None)# newcameramtx)
-        return new_image
-
-
-    def callback(self,i,d,T_WS_C,T_WS_r,sb,camera_model,time):#ros_data):
-        undist_image = i#self.undistort_image(i)
-        image = image_class(undist_image,d,time)#,frame_time)
+    def callback(self,i,d,T_WS_C,T_WS_r,sb,camera_model,time):
+        image = image_class(i,d,time)
         self.buffers["image"].append(image)
         r,colours = self.model.mask_predict(image)
 
@@ -121,8 +102,7 @@ def get_nearest_pose(time,filenames):
 
 def main(args):
     '''Initializes and cleanup ros node'''
-    path = '/home/peter/Documents/okvis_drl/build/road2_dataset'#tate3_dataset'#blackfriars1_dataset'#
-    #path = '/home/peter/catkin_ws/src/mask_rcnn/src/mask_rcnn/at.avi'
+    path = '/home/peter/Documents/okvis_drl/build/road4_dataset'#tate3_dataset'#blackfriars1_dataset'#
 
     images = get_image_names(path+"/cam0/data")
     depth_images = get_xml_names(path+"/cam1/data")
@@ -130,9 +110,8 @@ def main(args):
     o_T_WS_r = get_file_names(os.path.join(path,"pose"),"T_WS_r.txt",to_number)
     o_sb = get_file_names(os.path.join(path,"pose"),"sb.txt",to_number)
 
-    #cap = cv2.VideoCapture(path)
-    frame_width = 480#get_image(images[0]).shape[1]
-    frame_height = 180*3#get_image(images[0]).shape[0]*2
+    frame_width = 480
+    frame_height = 180*3
 
 
     with open(os.path.join("utils",'camera_model.json')) as f:
@@ -142,7 +121,7 @@ def main(args):
 
     for index,i,d in zip(range(len(images)),images,depth_images):
         print("Index is " + str(index))
-        if index > 400:#800#670:#30:#0:#index > 87 and index < 89: #> 1570 and index <1576:
+        if index > 0:
             pose = get_nearest_pose(i,o_T_WS_r)
             T_WS_C,T_WS_r,sb = o_T_WS_C[pose],o_T_WS_r[pose],o_sb[pose]
             ic.callback(get_image(i),get_array_xml(d),gd(T_WS_C),gd(T_WS_r),gd(sb),camera_model,get_time_from_filename(i))

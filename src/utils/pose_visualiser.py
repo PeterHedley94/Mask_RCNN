@@ -51,7 +51,6 @@ class pose_visualiser:
                 radius = uncert[point]
                 point = (int(to_plot[point,0]),int(to_plot[point,1]))
                 cv2.circle(self.image,point,int(radius*self.scale),(255,0,255),1)
-            #cv2.polylines(self.image,np.int32([to_plot]),False,(255,0,255),1)
 
     def plot(self,objects,cycle_model):
         self.image = np.zeros((self.height,self.width,3))
@@ -89,11 +88,8 @@ class pose_visualiser:
             self.scale = yscale
 
         to_plot = self.image_coords(self.points.copy())
-        #print("Have these points to plot " + str(to_plot))
         if self.count > 2:
             cv2.polylines(self.image,np.int32([to_plot]),False,(255,255,255),1)
-        #cv2.imshow('m',self.image)
-        #cv2.waitKey(2)
 
         self.plot_bike_path(cycle_model)
         return self.image

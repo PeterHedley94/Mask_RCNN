@@ -93,7 +93,7 @@ class model:
 
     def mask_predict(self,image):
         filename = str(image.time) + ".p"
-        directory = "road2_masks"
+        directory = "road4_masks"
         if not os.path.exists(os.path.join(ROOT_DIR,directory,filename)):
             with graph.as_default():
                 #results contains ['rois', 'scores', 'class_ids', 'masks']

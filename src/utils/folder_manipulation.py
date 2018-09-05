@@ -98,31 +98,3 @@ def get_resized_image(filepath,height,width):
     img = cv2.imread(filepath)
     resized_image = cv2.resize(img, (width,height)) #np.expand_dims(, axis=0)
     return resized_image
-
-#STACK ALL IMAGES IN A FOLDER INTO AN TENSOR
-def dstack_folder_sequence(directory_, sequence_length):
-    image_list = get_image_names(directory_)
-    if len(image_list) != sequence_length:
-        for i in range(len(image_list),sequence_length,1):
-            image_list.append(image_list[len(image_list)-1])
-
-    if sequence_length != 1 and len(image_list) != sequence_length:
-        print("Incompatible sequence {}".format(directory_))
-        return
-
-    images = get_image(os.path.join(directory_, image_list[0]))
-    if len(image_list) > 1:
-        for image in image_list[1:]:
-            new_image = get_image(os.path.join(directory_, image))
-            images = np.concatenate([new_image,images],axis = 0)
-    return images
-
-
-# def dstack_folder(directory_):
-#     image_list = get_image_names(directory_)
-#     images = get_image(os.path.join(directory_, image_list[0]))
-#     if len(image_list) > 1:
-#         for image in image_list[1:]:
-#             new_image = get_image(os.path.join(directory_, image))
-#             images = np.concatenate([new_image,images],axis = 0)
-#     return images

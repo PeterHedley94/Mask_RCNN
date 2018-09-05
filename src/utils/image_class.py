@@ -145,7 +145,7 @@ class roi_class:
         real_height = abs(world_array[2,0]-world_array[2,1])
         check_size = expected_heights[class_names[self.class_[i]]]
         depth = self.correct_depth(real_height,check_size,array)
-        if depth > 20:
+        if depth > 13:
             self.remove_indices.append(i)
         return depth
 
@@ -274,8 +274,8 @@ class roi_class:
             q = [15,15,15,7,7,1.5,1.5,1.5,0.7,0.7]
 
         r = [0.1,0.1,0.1,20,20]
-        self.kalman[i].Q =  np.diag(np.array(q,dtype = np.float64))/100 # 1e-5 *
-        self.kalman[i].R = np.diag(np.array(r,dtype = np.float64)) # 1e-1 *
+        self.kalman[i].Q =  np.diag(np.array(q,dtype = np.float64))/200
+        self.kalman[i].R = np.diag(np.array(r,dtype = np.float64))/2
 
     def correct_Kalman_time(self,deltat):
         for i in range(self.no_rois):

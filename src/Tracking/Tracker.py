@@ -52,22 +52,14 @@ def match_ROIs(older, newer, BRISK_):
         print("No objects in last frame")
         return newer.id, newer
 
-    #Methods of matching ROIs
-    #funcdict = [BRISK_.get_match_score,Kalman_predict]
-    #funcdict = [Kalman_predict]
     funcdict = [tracker_predict,BRISK_.get_match_score,Kalman_predict]
-    #funcprob = [BRISK_.get_probabilities,Kalman_predict_probability]
     funcprob = [tracker_predict_probability,BRISK_.get_probabilities,Kalman_predict_probability]
-    #'bb_intersection_over_union': bb_intersection_over_union_probabilities,
 
     matches = np.zeros((len(funcdict),newer.no_rois,older.no_rois))
     indices = np.zeros((newer.no_rois))
 
     for old_ in range(0,older.no_rois):
-        #print("Kalman number " +str(old_) + " state prior is " + str(older.kalman[old_].statePost))
         older.kalman[old_].predict()
-        #print("Kalman number " +str(old_) + " prediction is " + str(older.kalman[old_].statePre))
-        #if older.tracker[old_] == None:
         older.intialise_tracker(old_)
 
         try:
@@ -83,20 +75,11 @@ def match_ROIs(older, newer, BRISK_):
                     matches[c,new_,old_] = 0
     start = time.time()
 
-    #print(matches)
-    #print("............. matches 1")
-    #Combine methods
     for c,method_ in enumerate(funcprob):
         matches[c,:,:] = method_(matches[c,:,:])
         if c > 0:
-            #matches[0,:,:] = matches[0,:,:] + matches[c,:,:]
             matches[0,:,:] = np.multiply(matches[0,:,:],matches[c,:,:])
-    #print(matches)
-    #print("............. matches 2")
-    #print("MAx index theshold is " + str(INDEX_SELECTOR_THRESHOLD))
-    #Check there are detected objects in new frame
-    #print(matches)
-    #print(".............")
+
     if newer.no_rois > 0:
         [final_indices,not_in] = max_index_selector(matches[0,:,:])
     else:

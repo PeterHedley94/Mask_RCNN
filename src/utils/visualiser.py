@@ -4,9 +4,6 @@ sys.path.insert(1,'/usr/local/lib/python3.5/dist-packages')
 import cv2, numpy as np,imutils, random,math
 from utils.pose_visualiser import *
 from utils.object_map_visualiser import *
-IMAGE_COUNT = 0
-ROI_IMAGE_COUNT = 0
-
 
 def random_colors(N, bright=True):
     """
@@ -90,10 +87,8 @@ def draw_rects(img,m_,class_names):
     lineType=2
 
     for i in range(m_.no_rois):
-        #lives,roi,id,class_,colour,key1,kalman
-        #,mrcnn_out.roi_dims_c,mrcnn_out.id,mrcnn_out.colours,mrcnn_out.keypoints,mrcnn_out.kalman
         ''''ry1, rx1, ry2, rx2'''
-        if m_.lives[i] > -100:# and m_.class_[i] in [1,2,3,4,5,6,7,8]: #[40]
+        if m_.lives[i] > 0:
             pt1,pt2 = x_y_from_cx_cy(m_.roi_dims_c[[0,1,4,5],i])
             if check_in_frame(pt1) and check_in_frame(pt2):
                 pos_ = np.array(pt1)
@@ -101,8 +96,6 @@ def draw_rects(img,m_,class_names):
                 cv2.rectangle(img,pt1,pt2,(0,0,0))
                 cv2.putText(img,str(m_.id[i]), pos_, font,fontScale, fontColor, thickness = 1)
 
-            #print("The real state is " + str(m_.roi_dims_w[[0,1,4,5],i]))
-            #print("The kalman predicted state is" + str(m_.kalman[i].statePre))
             k_c_x,k_c_y = m_.world_to_camera(m_.kalman[i].statePre[:3])[:2]#.append(kalman.statePre[[4,5]])
             k_w,k_h = m_.kalman[i].statePre[[3,4]]
             pt1,pt2 = x_y_from_cx_cy([k_c_x,k_c_y,k_w,k_h])
@@ -121,10 +114,8 @@ def draw_depth_text(img,m_):
     lineType=2
 
     for i in range(m_.no_rois):
-        #lives,roi,id,class_,colour,key1,kalman
-        #,mrcnn_out.roi_dims_c,mrcnn_out.id,mrcnn_out.colours,mrcnn_out.keypoints,mrcnn_out.kalman
         ''''ry1, rx1, ry2, rx2'''
-        if m_.lives[i] > -100:# and m_.class_[i] in [1,2,3,4,5,6,7,8]:
+        if m_.lives[i] > 0:
             pt = tuple([int(m_.roi_dims_c[[0],i]),int(m_.roi_dims_c[[1],i])])
             if check_in_frame(pt):
                 cv2.putText(img,str(round(m_.depth_rois[i],2)), pt, font,fontScale, fontColor, thickness = 3)
@@ -140,13 +131,8 @@ def draw_masks(img,mrcnn_out):
 def get_depth_plot(array):
     h,w = array.shape
     array2 = np.zeros((h,w)) + 50000
-    #array = array/50
-    #array[array>15] = 15
     array = np.divide(np.log(array),np.log(array2))
     array *= 255/array.max()
-    #array = cv2.medianBlur(np.array(array,dtype=np.float32),5)
-    #array = cv2.GaussianBlur(array,(15,15),0)
-    #array = cv2.convertScaleAbs(array, alpha=255/array.max(), beta=0.)
     nice_array = np.zeros((h,w,3))
     for channel in range(3):
         nice_array[:,:,channel] = array
@@ -169,8 +155,6 @@ class visualiser:
         mask_image = raw.copy()
         mask_image = display_instances(mask_image, mrcnn_output.masks,colors=mrcnn_output.colours)
         draw_rects(mask_image,mrcnn_output,class_names)
-        #cv2.imwrite(str(IMAGE_COUNT) + ".jpg",mask_image)
-        cv2.imwrite("progress.jpg",mask_image)
         mask_image = imutils.resize(mask_image,width=w,height=h)
 
         #POSE
@@ -182,7 +166,6 @@ class visualiser:
 
         #DEPTH IMAGE
         depth_image = get_depth_plot(mrcnn_output.depth.copy())
-        #cv2.imwrite(os.path.join("depth",str(IMAGE_COUNT)+".jpg"),depth_image)
         depth_image = display_instances(depth_image, mrcnn_output.masks,colors=mrcnn_output.colours)
         draw_depth_text(depth_image,mrcnn_output)
 
@@ -201,7 +184,4 @@ class visualiser:
         cv2.imshow("i",img)
         cv2.waitKey(1)
         print(img.shape)
-        cv2.imwrite("output_images/" + str(IMAGE_COUNT) + ".jpg",img)
-        IMAGE_COUNT += 1
-        cv2.imwrite("image.jpg",img)
         output_video.write(img)

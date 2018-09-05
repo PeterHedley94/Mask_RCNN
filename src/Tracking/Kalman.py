@@ -49,13 +49,11 @@ class Kalman_Filter:
         pt2 = self.K @ self.R @ self.K.transpose()
         self.errorCovPost = pt1 @ self.errorCovPre @ pt1.transpose() + pt2
         self.Y_post = state - self.H @ self.statePost
-        #self.update_log_likelihood()
 
     def update_log_likelihood(self):
         pt1 = self.Y_pre.transpose() @ self.S @ self.Y_pre
         pt2 = math.log(np.linalg.det(self.S)) + self.measurable * math.log(2*math.pi)
         self.log_m_likelihood = self.log_m_likelihood - 1/2*(pt1 + pt2)
-        #print("Log likelihood is : " + str(self.log_m_likelihood))
 
     #small hack if likelihood called before correct is called
     def initialise_S(self):

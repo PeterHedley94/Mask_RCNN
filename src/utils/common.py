@@ -13,7 +13,7 @@ KALMAN_SURE_THRESHOLD = 10**6
 INDEX_SELECTOR_THRESHOLD = 10**-20#5000#(KALMAN_LIKELIHOOD_THRESHOLD-KALMAN_SURE_THRESHOLD) *BRISK_MIN_VALUE
 
 
-expected_heights = {'person':[1.1,1.5,2.15],'bicycle':[0.6,1.0,1.2],"car":[1.2,1.6,2.5],'motorcycle':[0.6,1.0,1.2],
+expected_heights = {'person':[1.1,1.5,2.15],'bicycle':[0.6,1.0,1.2],"car":[0.6,1.6,3],'motorcycle':[0.6,1.0,1.2],
                     'bus':[2.5,3.0,3.5],'truck':[2.5,3.0,3.5],'bottle':[0.10,0.2,0.35]}
 
 
@@ -47,36 +47,21 @@ IM_WIDTH = 200
 RAW_HEIGHT = 1024
 RAW_WIDTH = 1280
 
-'''
-IM_HEIGHT = 299
-IM_WIDTH = 299'''
 
-PRETRAINED_MODEL = False
-NUMBER_CLASSES = 20
-BATCH_SIZE = 16
-NUMBER_EPOCHS = 500
-NUMBER_CHANNELS = 3
-IMAGES_PER_FOLDER = 12
-SEND_TO_SLACK = False
-
-CHECKPOINTS_FOLDER = os.path.join('MODEL_OUTPUTS','checkpoints')
-MODEL_SAVE_FOLDER = os.path.join('MODEL_OUTPUTS','models')
-OLD_MODELS_FOLDER = os.path.join('MODEL_OUTPUTS','old_models')
-TENSORBOARD_LOGS_FOLDER = os.path.join('MODEL_OUTPUTS','logs')
-TENSORBOARD_OLD_LOGS_FOLDER = os.path.join('MODEL_OUTPUTS','old_logs')
-INTERMEDIATE_FILE = os.path.join('MODEL_OUTPUTS','checkpoints','intermediate.hdf5')
-JSON_LOG_FILE = os.path.join('MODEL_OUTPUTS','loss_log.json')
-JSON_OLD_LOGS_FOLDER = os.path.join('MODEL_OUTPUTS','old_json')
-
-#THESE PARAMETERS BELOW ARE NOT USED IN MASTER SUBMITTED AS IT USES VGG_TESTING
-
-SOURCE = os.path.join("DATA","product-image-dataset3")
-TRAIN_DATA = os.path.join("DATA","f_d22_training_data")#"March-18","training_data")
-VALIDATE_DATA = os.path.join("DATA","f_d22_validation_data")#"March-18","validation_data")
-TEST_DATA = os.path.join("DATA","March-18","test_data")
-DEBUG_FOLDER = os.path.join("DATA","DEBUGGING_DATA","debug_folder")
+IM_HEIGHT_model, IM_WIDTH_model, NUMBER_CHANNELS = 150,150,3
+#IM_HEIGHT, IM_WIDTH, NUMBER_CHANNELS = 480,640,3
+sequence_length_ = 5
+sequence_length = 5
+pose_data_dims = (4,4)
+number_outputs = 3
+batch_size = 3
+BATCH_SIZE = 3
+epochs = 100
+NUMBER_EPOCHS = epochs
+images = False
+image_height = 480#180
+image_width= 640#240
+no_image_channels=3
 
 
-TRAIN_DATA_GROUPED = os.path.join("DATA","training_data_grouped")
-VALIDATE_DATA_GROUPED = os.path.join("DATA","validation_data_grouped")
-TEST_DATA_GROUPED = os.path.join("DATA","test_data_grouped")
+CYCLIST_MODEL_LOCATION = "/home/peter/Documents/rnn_prediction/MODEL_OUTPUTS/total_model.hdf5"

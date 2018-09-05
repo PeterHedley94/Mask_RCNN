@@ -28,13 +28,11 @@ class obj_map_visualiser:
             Prediction,Cov = m_.kalman[index].predict_seconds(float(i+1))
             x,y,z = Prediction[:3]
             array[:,i] = x,y
-            #print("Covariance of prediction is \n" + str(np.array(Cov,dtype = np.int16)))
-            #print("After conversion" + str(np.multiply(Cov[:3,:3],np.eye(3))))
-            radius = Cov #np.max(np.multiply(Cov[:3,:3],np.eye(3)))/2
+            radius = Cov
             if m_.object_collision[index] == False:
                 cv2.circle(img,self.image_coords(x,y),int(radius*self.scale),(255,0,0),1)
             else:
-                cv2.circle(img,self.image_coords(x,y),int(radius*self.scale),(0,0,255),1)
+                cv2.circle(img,self.image_coords(x,y),int(radius*self.scale),(0,0,255),5)
         return img
 
     def x_y_from_cx_cy(array):
@@ -49,10 +47,8 @@ class obj_map_visualiser:
         return points
 
     def image_coords(self,x,y):
-        #print("Plotting Object at : " + str(x) + " , " + str(y))
         x = (self.width/2) + (x*self.scale)/2
         y = (self.height/2) - (y*self.scale)/2
-        #print("Plotting Object on image at : " + str(x) + " , " + str(y))
         return (int(x),int(y))
 
     def plot(self,img,mrcnn_output,class_names):
@@ -65,7 +61,6 @@ class obj_map_visualiser:
             self.scale = yscale
 
         for i in range(mrcnn_output.no_rois):
-            #self.image_coords(rois[i,0],rois[i,1])
             x,y = mrcnn_output.roi_dims_w[0,i],mrcnn_output.roi_dims_w[1,i]
 
             self.xpoints.append(x)
@@ -86,9 +81,4 @@ class obj_map_visualiser:
             #Predicted Path
             img = self.plot_object_path(img,mrcnn_output,i)
 
-
-
-        #cv2.point(self.image,np.int32([to_plot]),False,(255,255,255),1)
-        #cv2.imshow('m',self.image)
-        #cv2.waitKey(2)
         return img
